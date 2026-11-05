@@ -67,4 +67,6 @@ Name: "{autoprograms}\卸载 {#MyAppName}"; Filename: "{uninstallexe}"
 Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: desktopicon
 
 [Run]
-Filename: "{app}\{#MyAppExeName}"; Description: "启动 {#MyAppName}"; Flags: nowait postinstall skipifsilent
+; shellexec: MiniHUD.exe carries a requireAdministrator manifest, so CreateProcess fails with
+; error 740. ShellExecuteEx routes through the UAC prompt the same way Explorer does.
+Filename: "{app}\{#MyAppExeName}"; Description: "启动 {#MyAppName}（需要管理员权限）"; Flags: nowait postinstall skipifsilent shellexec
