@@ -3,6 +3,7 @@
 #include <windows.h>
 
 #include <string>
+#include "metric_rules.h"
 
 enum class Corner { TopLeft = 0, TopRight, BottomLeft, BottomRight };
 
@@ -15,12 +16,20 @@ constexpr int kMaxUpdateIntervalMs = 5000;
 
 struct Config {
     // [Overlay]
-    Corner corner = Corner::TopRight;
-    int offsetX = 12;
-    int offsetY = 12;
+    Corner corner = Corner::TopLeft;
+    bool singleLine = true;
+    bool englishMetrics = false;
+    bool startupDefaultApplied = false; // enable once, then respect the user's startup switch
+    int itemsPerRow = 4;
+    float moduleGap = 16.0f;
+    float rowGap = 4.0f;
+    bool alertsEnabled = true;
+    std::array<float, kMetricCount> alertLimits = kDefaultLimits;
+    int offsetX = 0;
+    int offsetY = 0;
     int monitor = 0;              // 0 = primary, then the remaining monitors in enumeration order
     float fontScale = 1.0f;
-    float backgroundAlpha = 0.55f;
+    float backgroundAlpha = 0.92f;
     int updateIntervalMs = 500;
     std::string hotkey = "Ctrl+Shift+F12";
     bool hideFromCapture = false;
@@ -28,14 +37,17 @@ struct Config {
     // [Metrics]
     bool showFps = true;
     bool showFrameTime = false;
-    bool showCpuUsage = true;
+    bool showCpuUsage = false;
     bool showCpuTemp = true;
-    bool showGpuUsage = true;
+    bool showGpuUsage = false;
     bool showGpuTemp = true;
     bool showCpuPower = false;
     bool showGpuPower = false;
-    bool showVram = false;
+    bool showVram = true;
     bool showRam = false;
+    bool showDiskTemp = false;
+    bool showDiskSpeed = false;
+    bool showNetworkSpeed = false;
     bool showFrameGraph = false;
     bool fastFrameGraph = false; // redraw the graph ~30 times a second instead of every update interval
     bool fahrenheit = false;
@@ -44,7 +56,7 @@ struct Config {
     bool onlyWhenFocused = false; // ...and while the tracked game is not in the foreground (needs onlyWithGame)
 
     // [Sensors]
-    bool offerPawnIOInstall = true; // ask on startup to install the bundled PawnIO driver
+    bool offerPawnIOInstall = false; // driver installation is always an explicit choice
 
     void Clamp();
 };

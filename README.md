@@ -1,98 +1,56 @@
-# FPS Monitor
+# MiniHUD
 
-A topmost, click-through Dear ImGui overlay that shows FPS, frame time, CPU and GPU usage, temperature and power, and RAM / VRAM use. Nothing is injected into games, and the game process is never opened.
+Windows 游戏性能小黑卡。默认在屏幕左上角用单行显示帧率、CPU 温度、GPU 温度和显存已用/总量。卡片无边框、点击穿透，优先支持无边框窗口游戏；不向游戏进程注入代码。
 
-## Metrics
+## 下载
 
-| Metric | Shown by default | Refresh | Source |
-|---|---|---|---|
-| FPS / frame time | FPS on, frame time off | Update interval | ETW present events (DXGI, D3D9, DxgKrnl) for the foreground app or the tracked game (see Usage) |
-| CPU usage | on | Update interval | PDH `% Processor Utility` |
-| CPU temp | on | Update interval | [PawnIO](https://pawnio.eu) driver + signed module: `AMDFamily17` (AMD Zen) or `IntelMSR` (Intel, experimental) |
-| CPU power | off | 2 s | PawnIO: package energy counter MSR, averaged between reads |
-| GPU usage / temp | on | Update interval | NVML (NVIDIA), ADL (AMD, experimental), else D3DKMT + PDH `GPU Engine` counters |
-| GPU power | off | 2 s | NVML or ADL. N/A on the fallback |
-| VRAM used / total | off | 5 s | NVML or ADL, else PDH `GPU Adapter Memory` counter |
-| RAM used / total | off | 5 s | `GlobalMemoryStatusEx` |
-| Frame time graph | off | Update interval, or ~30 Hz with **Fast graph updates** | The same ETW present events, last 5 s |
+[下载 Windows x64 EXE](https://github.com/YishV/MiniHUD/releases/latest/download/MiniHUD.exe) · [查看所有版本](https://github.com/YishV/MiniHUD/releases)
 
-- The update interval is 500 ms by default (100–5000 ms) and set in Settings or `config.ini`.
-- Power and memory refresh at the listed period, or at the update interval if that's longer.
-- The frame time graph shows the time between the FPS target's frames over the last 5 seconds, newest on the right. Frames taking over twice the average of the normal (non-red) frames in the second before them are drawn in red. Leaving stutters out of the average keeps one long hitch from raising the limit afterwards; after a lasting frame rate drop, the limit adapts to the new rate within a second. Each frame is judged only against earlier frames, so it keeps its color while it scrolls across. The scale is fixed from 0 ms (a little above the bottom edge) to 60 ms at the top, so the line never jumps; slower frames are drawn at the top edge. **Fast graph updates** redraws only the graph about 30 times a second, so it scrolls smoothly; the other values keep the update interval.
-  - The graph scrolls with the clock, about 120 ms behind real time, so frames that ETW delivers in bursts are already in place when drawn.
-  - It costs about 2% of one CPU core in this app (about 0.6 ms per redraw, mostly in the graphics driver), and it pauses while the overlay is hidden.
-- Hidden metrics aren't polled at all. When FPS and frame time are both hidden, the ETW session is stopped, unless the overlay is set to show only while a game is detected.
+便携使用：把 EXE 放到固定目录后运行。发布页提供 ZIP 包、源代码和 SHA-256 校验文件。
 
-## Hardware support
-| Hardware | Status | How |
+![MiniHUD 猫咪图标](resources/cat-preview.png)
+
+## 运行
+
+双击 `release\MiniHUD.exe`。首次运行若弹出 Windows 管理员提示，需要同意才能采集 ETW 帧率。`Ctrl+Shift+F12` 显示或隐藏小黑条；黑条显示时点击托盘图标打开设置，右键可隐藏或退出。隐藏黑条时托盘图标也隐藏，再按相同快捷键即可恢复两者；也可再次运行程序打开设置。
+
+中文设置窗口的 **显示设置** 页可开关指标，切换单行/多行（每行 1–8 项），切换中文 / English 指标，调整指标水平间距、行间距、位置、大小、透明度和刷新间隔；**告警阈值** 页可修改各项标红阈值；**电脑配置** 页显示 CPU、GPU、内存和磁盘型号及传感器状态。关闭设置时保存到程序旁的 `config.ini`。
+
+| 指标 | 数据来源 | 默认 |
 |---|---|---|
-| AMD Zen CPUs (Ryzen / Threadripper / EPYC, family 17h–1Ah) | Primary target | PawnIO `AMDFamily17`: Tctl/Tdie from the SMN thermal register, power from the package energy MSR |
-| NVIDIA GPUs | Primary target | NVML (`nvml.dll`, ships with the driver) |
-| **Intel CPUs** | **Experimental, untested** | PawnIO `IntelMSR`: package temperature as TjMax minus `IA32_PACKAGE_THERM_STATUS`, falling back to the core sensor. Power from the RAPL package energy MSR |
-| **AMD GPUs** | **Experimental, untested** | ADL (`atiadlxx.dll`, ships with the driver): usage, edge temperature, board/ASIC power from the PMLog sensor table (Vega 20 / RDNA and newer), VRAM from ADL. Older AMD GPUs use the fallback |
-| Any other GPU | Fallback | D3DKMT temperature + PDH usage/VRAM counters, like Task Manager. No power |
+| FPS | Windows ETW | 开 |
+| CPU 温度 | 已安装的 PawnIO 驱动；Intel 路径仍为实验性 | 开 |
+| GPU 温度、显存 | NVIDIA NVML、AMD ADL 或 Windows 回退源 | 开 |
+| RAM 已用/总量 | Windows 内存 API | 关 |
+| SSD 温度 | Windows 存储温度属性；设备不支持时显示 N/A | 关 |
+| 磁盘读写速度 | Windows PDH 所有物理磁盘总吞吐 | 关 |
+| 网速上传/下载 | Windows 活跃网卡累计字节差分 | 关 |
 
-The experimental paths follow what LibreHardwareMonitor does, but nobody has run them on real hardware yet. Expect N/A values or wrong readings. The CPU and GPU lines under **Sensor status** in Settings show which source is in use; include them in bug reports.
+CPU 温度需要单独安装 [PawnIO](https://github.com/namazso/PawnIO)。此构建不捆绑安装器，也不会自动安装驱动；未安装时显示 `N/A`，设置中能看到原因。温度与速率采集取决于设备和驱动支持。独占全屏游戏不保证显示。
 
-## Build
-Needs Visual Studio 2026 with the **Desktop development with C++** workload, which includes CMake. VS 2022 also works through the Ninja presets, but not the `vs2026` preset. The first configure downloads Dear ImGui, the PawnIO modules, the PawnIO installer and the AMD ADL SDK headers (MIT), all pinned and hash-checked, so it needs internet access.
+## 登录自启动与图标
 
-- **Visual Studio:** **File > Open > Folder**, pick the `x64 Release (Ninja)` preset, and build `fps_monitor.exe`.
-- **Terminal:** from a *Developer PowerShell for VS*, where `cmake` is on the PATH:
-  ```
-  cmake --preset vs2026
-  cmake --build --preset release
-  ```
-  The exe ends up in `build\vs2026\Release\fps_monitor.exe`. The `configure` step is only needed once; afterwards `cmake --build --preset release` is enough, and it reconfigures by itself when `CMakeLists.txt` changes.
+在“显示设置 → 行为”中勾选“登录 Windows 后自动启动”。新版首次运行默认启用并更新启动任务；之后在设置里主动关闭会保留选择。开关读取和更新当前用户的 Windows 计划任务状态。任务仅在当前用户登录约 8 秒后，以交互式管理员权限运行当前程序并传入 `--autostart`；黑条和托盘图标自动显示。快捷键隐藏黑条时托盘也隐藏，再按快捷键同时恢复。手动运行与自启的显示逻辑一致。不保存账户密码。关闭开关会删除 MiniHUD 自己的启动任务。程序移动后，设置会提示更新启动路径。请从固定安装目录启用；Windows 自身的节能或组织策略仍可能影响启动。
 
-Build options, passed to the configure step as `-D<option>=OFF`:
+图标是原创白底深灰线条猫，托盘和 EXE 使用同一组 16–256 像素图标。SVG 源文件在 `resources/icon.svg`，执行 `python tools/make_icon.py` 或 `powershell -File tools/make_icon.ps1` 可重新生成 ICO，不依赖额外 Python 包。
 
-| Option | Default | Effect |
-|---|---|---|
-| `FPS_MONITOR_REQUIRE_ADMIN` | ON | Embeds the admin manifest. Without it, FPS, CPU temp and CPU power show N/A. |
-| `FPS_MONITOR_BUNDLE_PAWNIO` | ON | Embeds the PawnIO installer, adding about 3.4 MB to the exe. |
+## 告警与布局
 
-The app icon's source is `resources/icon.svg`. After editing it, run `python tools/make_icon.py` to regenerate `resources/app.ico`. Sizes of 40 px and up are rendered from the SVG. The 16–32 px sizes are drawn by the script as a flat, pixel-snapped version of the same design, from constants at the top of the script, so keep those in sync with the SVG. The script needs Pillow and Chrome or Edge; normal builds use the committed `.ico` and need neither.
+默认 FPS 低于 45、帧时间达到 33.3 ms、CPU 占用达到 95%、CPU 温度达到 90℃、GPU 温度达到 85℃、SSD 温度达到 70℃、内存/显存占用达到 90% 时，数值变为红色。GPU 利用率、功耗与读写速度没有通用异常上限，默认不告警，可自行设置。阈值填 0 关闭单项告警，也可关闭全部告警；无数据不会误报。温度阈值始终使用摄氏度。
 
-Run `fps_monitor.exe` and accept the admin prompt; ETW and PawnIO both need admin rights. Only one instance runs at a time; starting it again opens the settings panel of the running one.
+单行放不下屏幕时自动换行。旧版配置首次加载时迁移到左上角单行，之后保留用户选择。不包含网络延迟功能。
 
-## PawnIO (CPU temperature and power)
-The official signed `PawnIO_setup.exe` (v2.2.0, SHA-256 checked at configure time) is embedded in the exe.
+## 编译
 
-If PawnIO is missing or outdated and CPU temperature or power is shown, the first launch asks whether to install it. It then extracts `PawnIO_setup.exe` next to `fps_monitor.exe`, runs `PawnIO_setup.exe -install -silent`, and deletes it afterwards. If you choose No, it doesn't ask again (`[Sensors] OfferPawnIOInstall=0`). The settings panel then shows an **Install PawnIO driver** button next to the CPU line under Sensor status.
+需要 Visual Studio 2022 C++ 工具链和 CMake 3.24 以上。首次配置会下载固定版本的 Dear ImGui、PawnIO 模块与 AMD ADL SDK 头文件。默认关闭 PawnIO 安装器打包：
 
-When built with `FPS_MONITOR_BUNDLE_PAWNIO=OFF`, users install PawnIO themselves:
-```
-winget install namazso.PawnIO
+```powershell
+cmake -S . -B build\vs2022-final -G "Visual Studio 17 2022" -A x64 -DFPS_MONITOR_BUNDLE_PAWNIO=OFF
+cmake --build build\vs2022-final --config Release --parallel 4
+New-Item -ItemType Directory release -Force | Out-Null
+Copy-Item build\vs2022-final\Release\MiniHUD.exe release\MiniHUD.exe
 ```
 
-PawnIO is GPL-2.0 (source: https://github.com/namazso/PawnIO), and its modules are LGPL-2.1 (https://github.com/namazso/PawnIO.Modules). They're shipped unmodified. If you distribute this exe, include these source links.
+## 来源与许可
 
-## Usage
-- **Ctrl+Shift+F12**, or clicking the tray icon, opens the settings panel. Only the panel takes clicks; the rest of the screen stays usable. Press **Esc** or **Save & close** to write `config.ini`.
-- Right-click the tray icon to exit.
-- The Settings panel includes:
-  - **Displayed values:** which metrics to show, the temperature unit, game tracking, showing the overlay only in games, and whether to hide the overlay from screenshots and recordings.
-  - **Position:** corner, monitor and offset.
-  - **Appearance:** size and background opacity.
-  - **Behavior:** update interval and hotkey.
-  - **Sensor status:** the FPS target, and the CPU and GPU names and sensor states.
-- FPS is shown for the foreground app. With **Track game FPS when switching apps** turned on (`TrackGame=1`), the last focused game stays the target until it exits or another game is focused.
-  - A game is a full-screen app that renders frames. It's detected with `SHQueryUserNotificationState`, the same shell signal Windows uses to turn on Do Not Disturb for full-screen apps, so portable games work too.
-  - That signal is system-wide (it stays on while a full-screen game is open in the background), so the focused window must also have its content area cover the whole monitor, not be maximized, and not be the desktop or taskbar. Otherwise switching from a game to Task Manager or the desktop could make them the "game".
-  - The tracked game is followed through its window, not a process handle.
-- **Only show overlay for games** (`ShowOnlyWithGame=1`) needs the option above. The overlay stays hidden until a game is tracked, and hides again when that game exits. Settings always shows it.
-  - While hidden, only the FPS session runs, to spot games. The other sensors aren't polled.
-- **Only show while game is focused** (`ShowOnlyWhenGameFocused=1`) needs the option above. It also hides the overlay while another app is in the foreground, and shows it again as soon as the game is focused. Foreground changes come from an out-of-context `SetWinEventHook`, so nothing is loaded into other processes. Sensors keep polling while the game is in the background, so the values are current when it returns.
-- `config.ini` sits next to the exe and can also be edited by hand.
-
-## How it stays out of the way
-- **Small window:** the overlay window is only as big as the stats panel. It grows to the monitor size (minus one pixel) only while Settings is open. A full-screen topmost window would make Windows switch on Do Not Disturb and could stop games from using direct-flip presentation.
-- **No handles to the game:** the app never opens the game process. It gets process names from a Toolhelp snapshot, notices the tracked game exiting when its window disappears, and reads FPS from ETW events, the same mechanism PresentMon and Xbox Game Bar use.
-
-## Limitations
-- The overlay can't draw over true exclusive-fullscreen games. It works over borderless and windowed games, and over DX11/12 games that use Windows fullscreen optimizations.
-- Remote Desktop (mstsc) in the foreground takes the hotkey. Use the tray icon there.
-- CPU temperature and power need an AMD Zen or Intel CPU (Intel is experimental). Other CPUs show N/A.
-- Intel CPU and AMD GPU support is experimental and untested (see Hardware support).
-- PawnIO is a kernel driver. Some kernel anti-cheats keep blocklists of hardware-access drivers. If a game refuses to start, uninstall PawnIO; only CPU temperature and power stop working.
+本项目基于 [andrei-cb/fps_monitor](https://github.com/andrei-cb/fps_monitor) 的 `4b9ae7b` 版本，保留 [原项目说明](UPSTREAM.md) 与 [AGPL-3.0 许可证](LICENSE)。新增 Windows 磁盘和网络采集、电脑配置页及简洁卡片布局。分发修改版时遵守 AGPL-3.0，保留源码和版权信息。

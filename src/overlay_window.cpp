@@ -17,7 +17,7 @@ using Microsoft::WRL::ComPtr;
 
 namespace {
 
-const wchar_t kWindowClass[] = L"FpsMonitorOverlayWindow";
+const wchar_t kWindowClass[] = L"MiniHUDOverlayWindow";
 constexpr DWORD kBaseExStyle = WS_EX_TOPMOST | WS_EX_TOOLWINDOW | WS_EX_LAYERED | WS_EX_NOREDIRECTIONBITMAP;
 constexpr DWORD kPassiveExStyle = WS_EX_TRANSPARENT | WS_EX_NOACTIVATE;
 
@@ -25,13 +25,13 @@ void LoadFonts() {
     ImGuiIO& io = ImGui::GetIO();
     wchar_t winDir[MAX_PATH];
     GetWindowsDirectoryW(winDir, MAX_PATH);
-    for (const wchar_t* file : {L"seguisb.ttf", L"segoeui.ttf"}) {
+    for (const wchar_t* file : {L"msyh.ttc", L"msyh.ttf", L"simhei.ttf", L"segoeui.ttf"}) {
         wchar_t wpath[MAX_PATH];
         swprintf_s(wpath, L"%s\\Fonts\\%s", winDir, file);
         if (GetFileAttributesW(wpath) == INVALID_FILE_ATTRIBUTES) continue;
         char path[MAX_PATH * 3];
         WideCharToMultiByte(CP_UTF8, 0, wpath, -1, path, sizeof(path), nullptr, nullptr);
-        if (io.Fonts->AddFontFromFileTTF(path, 17.0f)) return;
+        if (io.Fonts->AddFontFromFileTTF(path, 15.0f)) return;
     }
     io.Fonts->AddFontDefault();
 }
@@ -54,7 +54,7 @@ std::vector<MonitorInfo> EnumerateMonitors() {
         if (!strncmp(name, "\\\\.\\", 4)) name += 4;
         char label[160];
         std::snprintf(label, sizeof(label), "%s  %ldx%ld%s", name, mi.rcMonitor.right - mi.rcMonitor.left,
-                      mi.rcMonitor.bottom - mi.rcMonitor.top, (mi.dwFlags & MONITORINFOF_PRIMARY) ? "  (primary)" : "");
+                      mi.rcMonitor.bottom - mi.rcMonitor.top, (mi.dwFlags & MONITORINFOF_PRIMARY) ? "  （主屏幕）" : "");
         info.label = label;
 
         if (mi.dwFlags & MONITORINFOF_PRIMARY) out.insert(out.begin(), info);
@@ -75,7 +75,7 @@ bool OverlayWindow::Create(HINSTANCE instance, MessageHandler handler) {
     wc.lpszClassName = kWindowClass;
     RegisterClassExW(&wc);
 
-    hwnd_ = CreateWindowExW(kBaseExStyle | kPassiveExStyle, kWindowClass, L"FPS Monitor", WS_POPUP, 0, 0, 1, 1,
+    hwnd_ = CreateWindowExW(kBaseExStyle | kPassiveExStyle, kWindowClass, L"MiniHUD", WS_POPUP, 0, 0, 1, 1,
                             nullptr, nullptr, instance, this);
     if (!hwnd_) return false;
     SetLayeredWindowAttributes(hwnd_, 0, 255, LWA_ALPHA);

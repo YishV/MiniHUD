@@ -9,7 +9,7 @@
 
 namespace {
 
-const wchar_t kSessionName[] = L"FpsMonitorOverlaySession";
+const wchar_t kSessionName[] = L"MiniHUDOverlaySession";
 
 // {CA11C036-0102-4A2D-A6AD-F03CFED5D3C9} Microsoft-Windows-DXGI
 const GUID kDxgiProvider = {0xCA11C036, 0x0102, 0x4A2D, {0xA6, 0xAD, 0xF0, 0x3C, 0xFE, 0xD5, 0xD3, 0xC9}};

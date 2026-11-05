@@ -7,6 +7,7 @@
 #include "sensors/gpu_adl.h"
 #include "sensors/gpu_d3dkmt.h"
 #include "sensors/gpu_nvml.h"
+#include "sensors/system_io.h"
 
 #include <algorithm>
 #include <chrono>
@@ -103,6 +104,8 @@ void SensorHub::Run() {
     const std::string cpuName = CpuPawnIO::CpuName();
     std::string gpuStatus;
     const std::unique_ptr<GpuSource> gpu = OpenGpu(gpuStatus);
+    DiskSpeed diskSpeed;
+    NetworkSpeed networkSpeed;
 
     const DWORD selfPid = GetCurrentProcessId();
     DWORD lastFgPid = 0;
@@ -124,7 +127,7 @@ void SensorHub::Run() {
     std::string name;
 
     // Slow metrics are read on their own schedule; their last values carry over between polls.
-    Clock::time_point nextCpuPower{}, nextGpuPower{}, nextVram{}, nextRam{};
+    Clock::time_point nextCpuPower{}, nextGpuPower{}, nextVram{}, nextRam{}, nextDiskTemp{};
     SensorSnapshot slow;
     uint32_t prevMask = 0;
     Clock::time_point lastPoll{};
@@ -283,12 +286,36 @@ void SensorHub::Run() {
             }
         }
 
+        if (due(nextDiskTemp, kMetricDiskTemp, kMemoryPeriodMs)) {
+            const DiskReading disk = ReadDiskTemperature();
+            slow.diskTemp = disk.temperature;
+            slow.diskName = disk.name;
+            slow.diskStatus = disk.status;
+        }
+        if (mask & kMetricDiskSpeed) {
+            float read = 0, write = 0;
+            if (diskSpeed.Sample(read, write)) {
+                s.diskReadMBps = read;
+                s.diskWriteMBps = write;
+            }
+        }
+        if (mask & kMetricNetworkSpeed) {
+            float down = 0, up = 0;
+            if (networkSpeed.Sample(down, up)) {
+                s.networkDownMBps = down;
+                s.networkUpMBps = up;
+            }
+        }
+
         s.cpuPowerW = slow.cpuPowerW;
         s.gpuPowerW = slow.gpuPowerW;
         s.vramUsedGB = slow.vramUsedGB;
         s.vramTotalGB = slow.vramTotalGB;
         s.ramUsedGB = slow.ramUsedGB;
         s.ramTotalGB = slow.ramTotalGB;
+        s.diskTemp = slow.diskTemp;
+        s.diskName = slow.diskName;
+        s.diskStatus = slow.diskStatus;
 
         {
             std::lock_guard lock(mutex_);

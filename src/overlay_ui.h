@@ -3,19 +3,25 @@
 #include "config.h"
 #include "overlay_window.h"
 #include "sensor_hub.h"
+#include "sensors/system_io.h"
+#include "startup_task.h"
 
 #include <imgui.h>
 
 #include <string>
 #include <vector>
 
-enum class UiAction { None, CloseSettings, ExitApp, InstallPawnIO };
+enum class UiAction { None, CloseSettings, ExitApp, InstallPawnIO, EnableStartup, DisableStartup };
 
 struct SettingsState {
     bool open = false;
     char hotkeyBuf[64] = {};
     bool pawnioInstalling = false;
     std::string pawnioMessage; // result of the last install attempt
+    bool diskInfoLoaded = false;
+    DiskReading diskInfo;
+    StartupState startup;
+    std::string startupMessage;
 };
 
 // Pivot of the stats panel for a corner: (0,0) = top-left ... (1,1) = bottom-right.

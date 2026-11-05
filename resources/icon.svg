@@ -1,34 +1,9 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256">
-  <!-- FPS Monitor app icon. Regenerate resources/app.ico with: python tools/make_icon.py -->
-  <defs>
-    <linearGradient id="tile" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="#2c323d"/>
-      <stop offset="1" stop-color="#14171d"/>
-    </linearGradient>
-    <!-- Bar colors match the overlay labels: FPS green, CPU blue, GPU orange. -->
-    <linearGradient id="fps" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="#b4f07f"/>
-      <stop offset="1" stop-color="#6cc23c"/>
-    </linearGradient>
-    <linearGradient id="cpu" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="#8fd2ff"/>
-      <stop offset="1" stop-color="#3f9ae6"/>
-    </linearGradient>
-    <linearGradient id="gpu" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="#ffc07a"/>
-      <stop offset="1" stop-color="#f07f22"/>
-    </linearGradient>
-  </defs>
-
-  <!-- Tile -->
-  <rect x="12" y="12" width="232" height="232" rx="52" fill="url(#tile)"/>
-  <rect x="13.5" y="13.5" width="229" height="229" rx="50.5" fill="none" stroke="#ffffff" stroke-opacity="0.10" stroke-width="3"/>
-
-  <!-- Baseline -->
-  <rect x="52" y="200" width="152" height="8" rx="4" fill="#ffffff" fill-opacity="0.18"/>
-
-  <!-- Bars -->
-  <rect x="52" y="64" width="40" height="128" rx="10" fill="url(#fps)"/>
-  <rect x="108" y="120" width="40" height="72" rx="10" fill="url(#cpu)"/>
-  <rect x="164" y="96" width="40" height="96" rx="10" fill="url(#gpu)"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256" stroke-linecap="round" stroke-linejoin="round">
+  <!-- Original MiniHUD line cat. Regenerate the multi-size ICO with tools/make_icon.ps1. -->
+  <rect x="8" y="8" width="240" height="240" rx="54" fill="#FFFFFF"/>
+  <path d="M 54 115 L 44 51 C 43 43 48 40 55 45 L 91 68 C 114 59 142 59 165 68 L 201 45 C 208 40 213 43 212 51 L 202 115 C 219 170 184 211 128 211 C 72 211 37 170 54 115 Z" fill="none" stroke="#343A43" stroke-width="11"/>
+  <path d="M 78 132 C 82 121 94 121 99 132 M 157 132 C 162 121 174 121 178 132" fill="none" stroke="#343A43" stroke-width="10"/>
+  <circle cx="128" cy="149" r="5" fill="#D99191"/>
+  <path d="M 128 155 L 128 165 C 124 174 113 175 108 168 M 128 165 C 132 174 143 175 148 168" fill="none" stroke="#343A43" stroke-width="8"/>
+  <path class="detail" d="M 70 151 L 82 154 M 174 154 L 186 151" fill="none" stroke="#D99191" stroke-width="8"/>
 </svg>

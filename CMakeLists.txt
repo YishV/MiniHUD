@@ -57,7 +57,7 @@ pawnio_module_rc_path(PAWNIO_INTELMSR_MODULE_RC IntelMSR.bin)
 
 # The official, signed PawnIO installer, embedded so users can install the driver
 # from inside the app (it runs "PawnIO_setup.exe -install -silent" after asking).
-option(FPS_MONITOR_BUNDLE_PAWNIO "Embed the PawnIO driver installer in the executable" ON)
+option(FPS_MONITOR_BUNDLE_PAWNIO "Embed the PawnIO driver installer in the executable" OFF)
 set(PAWNIO_SETUP_VERSION "2.2.0")
 set(PAWNIO_SETUP_RC_LINE "")
 if(FPS_MONITOR_BUNDLE_PAWNIO)
@@ -120,6 +120,7 @@ endforeach()
 add_executable(fps_monitor WIN32
     src/main.cpp
     src/config.cpp
+    src/startup_task.cpp
     src/overlay_window.cpp
     src/overlay_ui.cpp
     src/sensor_hub.cpp
@@ -131,17 +132,49 @@ add_executable(fps_monitor WIN32
     src/sensors/gpu_nvml.cpp
     src/sensors/gpu_adl.cpp
     src/sensors/gpu_d3dkmt.cpp
+    src/sensors/system_io.cpp
     ${CMAKE_CURRENT_BINARY_DIR}/app.rc)
 
 target_include_directories(fps_monitor PRIVATE src resources)
 target_include_directories(fps_monitor SYSTEM PRIVATE "${ADL_SDK_INCLUDE_DIR}")
-target_compile_definitions(fps_monitor PRIVATE UNICODE _UNICODE WIN32_LEAN_AND_MEAN NOMINMAX)
+target_compile_definitions(fps_monitor PRIVATE UNICODE _UNICODE WIN32_LEAN_AND_MEAN NOMINMAX WINVER=0x0A00 _WIN32_WINNT=0x0A00 NTDDI_VERSION=0x0A000000)
 target_compile_options(fps_monitor PRIVATE /W4 /permissive- /utf-8)
 target_link_libraries(fps_monitor PRIVATE
-    imgui d3d11 dxgi dcomp pdh advapi32 gdi32 shell32 user32)
+    imgui d3d11 dxgi dcomp pdh iphlpapi advapi32 gdi32 shell32 user32 taskschd ole32 oleaut32)
+set_target_properties(fps_monitor PROPERTIES OUTPUT_NAME MiniHUD)
 
 # ETW kernel providers and the PawnIO driver both require elevation.
 option(FPS_MONITOR_REQUIRE_ADMIN "Embed a requireAdministrator manifest (FPS and CPU temp need it)" ON)
 if(FPS_MONITOR_REQUIRE_ADMIN)
     target_link_options(fps_monitor PRIVATE "/MANIFESTUAC:level='requireAdministrator' uiAccess='false'")
 endif()
+
+add_executable(minihud_sensor_probe EXCLUDE_FROM_ALL tools/sensor_probe.cpp src/sensors/system_io.cpp)
+target_include_directories(minihud_sensor_probe PRIVATE src)
+target_compile_definitions(minihud_sensor_probe PRIVATE WIN32_LEAN_AND_MEAN NOMINMAX WINVER=0x0A00 _WIN32_WINNT=0x0A00 NTDDI_VERSION=0x0A000000)
+target_link_libraries(minihud_sensor_probe PRIVATE pdh iphlpapi)
+
+add_executable(minihud_cpu_probe EXCLUDE_FROM_ALL
+    tools/cpu_probe.cpp src/sensors/cpu_pawnio.cpp src/pawnio_setup.cpp ${CMAKE_CURRENT_BINARY_DIR}/app.rc)
+target_include_directories(minihud_cpu_probe PRIVATE src resources)
+target_compile_definitions(minihud_cpu_probe PRIVATE WIN32_LEAN_AND_MEAN NOMINMAX UNICODE _UNICODE)
+target_link_libraries(minihud_cpu_probe PRIVATE advapi32 shell32)
+target_link_options(minihud_cpu_probe PRIVATE "/MANIFESTUAC:level='requireAdministrator' uiAccess='false'")
+
+add_executable(minihud_config_check EXCLUDE_FROM_ALL tools/config_check.cpp src/config.cpp)
+target_include_directories(minihud_config_check PRIVATE src)
+target_compile_definitions(minihud_config_check PRIVATE WIN32_LEAN_AND_MEAN NOMINMAX UNICODE _UNICODE)
+target_compile_options(minihud_config_check PRIVATE /utf-8)
+
+add_executable(minihud_ui_check EXCLUDE_FROM_ALL tools/ui_check.cpp src/overlay_ui.cpp src/config.cpp src/pawnio_setup.cpp src/sensors/system_io.cpp)
+target_include_directories(minihud_ui_check PRIVATE src resources)
+target_compile_definitions(minihud_ui_check PRIVATE WIN32_LEAN_AND_MEAN NOMINMAX UNICODE _UNICODE WINVER=0x0A00 _WIN32_WINNT=0x0A00 NTDDI_VERSION=0x0A000000)
+target_compile_options(minihud_ui_check PRIVATE /utf-8)
+target_link_libraries(minihud_ui_check PRIVATE imgui shell32 advapi32 pdh iphlpapi)
+
+add_executable(minihud_startup_check EXCLUDE_FROM_ALL tools/startup_check.cpp src/startup_task.cpp)
+target_include_directories(minihud_startup_check PRIVATE src)
+target_compile_definitions(minihud_startup_check PRIVATE WIN32_LEAN_AND_MEAN NOMINMAX UNICODE _UNICODE)
+target_compile_options(minihud_startup_check PRIVATE /utf-8)
+target_link_libraries(minihud_startup_check PRIVATE advapi32 taskschd ole32 oleaut32)
+target_link_options(minihud_startup_check PRIVATE "/MANIFESTUAC:level='asInvoker' uiAccess='false'")

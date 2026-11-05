@@ -5,6 +5,7 @@
 #include <algorithm>
 #include <cctype>
 #include <cstdio>
+#include <cstring>
 #include <sstream>
 #include <vector>
 
@@ -57,6 +58,11 @@ Corner ParseCorner(const std::string& s, Corner def) {
 } // namespace
 
 void Config::Clamp() {
+    itemsPerRow = std::clamp(itemsPerRow, 1, 8);
+    moduleGap = std::isfinite(moduleGap) ? std::clamp(moduleGap, 0.0f, 80.0f) : 16.0f;
+    rowGap = std::isfinite(rowGap) ? std::clamp(rowGap, 0.0f, 40.0f) : 4.0f;
+    for (size_t i = 0; i < alertLimits.size(); ++i)
+        alertLimits[i] = std::isfinite(alertLimits[i]) ? std::clamp(alertLimits[i], 0.0f, 1000000.0f) : kDefaultLimits[i];
     offsetX = std::clamp(offsetX, 0, kMaxOffset);
     offsetY = std::clamp(offsetY, 0, kMaxOffset);
     monitor = std::max(monitor, 0);
@@ -92,6 +98,21 @@ bool LoadConfig(const std::wstring& path, Config& cfg) {
     cfg.updateIntervalMs = ReadInt(path, ov, L"UpdateIntervalMs", cfg.updateIntervalMs);
     cfg.hotkey = ReadString(path, ov, L"Hotkey", cfg.hotkey);
     cfg.hideFromCapture = ReadBool(path, ov, L"HideFromCapture", cfg.hideFromCapture);
+    cfg.singleLine = ReadBool(path, ov, L"SingleLine", cfg.singleLine);
+    cfg.englishMetrics = ReadBool(path, ov, L"EnglishMetrics", cfg.englishMetrics);
+    cfg.startupDefaultApplied = ReadBool(path, ov, L"StartupDefaultApplied", cfg.startupDefaultApplied);
+    cfg.itemsPerRow = ReadInt(path, ov, L"ItemsPerRow", cfg.itemsPerRow);
+    cfg.moduleGap = ReadFloat(path, ov, L"ModuleGap", cfg.moduleGap);
+    cfg.rowGap = ReadFloat(path, ov, L"RowGap", cfg.rowGap);
+    if (ReadInt(path, ov, L"LayoutVersion", 0) < 2) {
+        cfg.corner = Corner::TopLeft;
+        cfg.singleLine = true;
+    }
+    cfg.alertsEnabled = ReadBool(path, L"Alerts", L"Enabled", cfg.alertsEnabled);
+    for (size_t i = 0; i < kMetricCount; ++i) {
+        const std::wstring key(kMetricKeys[i], kMetricKeys[i] + std::strlen(kMetricKeys[i]));
+        cfg.alertLimits[i] = ReadFloat(path, L"Alerts", key.c_str(), cfg.alertLimits[i]);
+    }
 
     const wchar_t* me = L"Metrics";
     cfg.showFps = ReadBool(path, me, L"ShowFps", cfg.showFps);
@@ -104,6 +125,9 @@ bool LoadConfig(const std::wstring& path, Config& cfg) {
     cfg.showGpuPower = ReadBool(path, me, L"ShowGpuPower", cfg.showGpuPower);
     cfg.showVram = ReadBool(path, me, L"ShowVram", cfg.showVram);
     cfg.showRam = ReadBool(path, me, L"ShowRam", cfg.showRam);
+    cfg.showDiskTemp = ReadBool(path, me, L"ShowDiskTemp", cfg.showDiskTemp);
+    cfg.showDiskSpeed = ReadBool(path, me, L"ShowDiskSpeed", cfg.showDiskSpeed);
+    cfg.showNetworkSpeed = ReadBool(path, me, L"ShowNetworkSpeed", cfg.showNetworkSpeed);
     cfg.showFrameGraph = ReadBool(path, me, L"ShowFrameTimeGraph", cfg.showFrameGraph);
     cfg.fastFrameGraph = ReadBool(path, me, L"FastFrameTimeGraph", cfg.fastFrameGraph);
     cfg.fahrenheit = ToLower(ReadString(path, me, L"TemperatureUnit", cfg.fahrenheit ? "F" : "C")) == "f";
@@ -120,7 +144,7 @@ bool LoadConfig(const std::wstring& path, Config& cfg) {
 bool SaveConfig(const std::wstring& path, const Config& cfg) {
     char buf[4096];
     int len = std::snprintf(buf, sizeof(buf),
-        "; FPS Monitor configuration. Also editable from the settings panel (hotkey or tray icon).\r\n"
+        "; MiniHUD configuration. Open settings from the tray icon; hotkey toggles the HUD.\r\n"
         "\r\n"
         "[Overlay]\r\n"
         "; TopLeft | TopRight | BottomLeft | BottomRight\r\n"
@@ -148,6 +172,9 @@ bool SaveConfig(const std::wstring& path, const Config& cfg) {
         "ShowGpuPower=%d\r\n"
         "ShowVram=%d\r\n"
         "ShowRam=%d\r\n"
+        "ShowDiskTemp=%d\r\n"
+        "ShowDiskSpeed=%d\r\n"
+        "ShowNetworkSpeed=%d\r\n"
         "ShowFrameTimeGraph=%d\r\n"
         "; 1 = redraw the frame time graph about 30 times a second, scrolling smoothly (other values keep UpdateIntervalMs)\r\n"
         "FastFrameTimeGraph=%d\r\n"
@@ -167,17 +194,30 @@ bool SaveConfig(const std::wstring& path, const Config& cfg) {
         cfg.updateIntervalMs, cfg.hotkey.c_str(), cfg.hideFromCapture ? 1 : 0,
         cfg.showFps ? 1 : 0, cfg.showFrameTime ? 1 : 0, cfg.showCpuUsage ? 1 : 0, cfg.showCpuTemp ? 1 : 0,
         cfg.showGpuUsage ? 1 : 0, cfg.showGpuTemp ? 1 : 0, cfg.showCpuPower ? 1 : 0, cfg.showGpuPower ? 1 : 0,
-        cfg.showVram ? 1 : 0, cfg.showRam ? 1 : 0, cfg.showFrameGraph ? 1 : 0, cfg.fastFrameGraph ? 1 : 0,
+        cfg.showVram ? 1 : 0, cfg.showRam ? 1 : 0,
+        cfg.showDiskTemp ? 1 : 0, cfg.showDiskSpeed ? 1 : 0, cfg.showNetworkSpeed ? 1 : 0,
+        cfg.showFrameGraph ? 1 : 0, cfg.fastFrameGraph ? 1 : 0,
         cfg.fahrenheit ? "F" : "C", cfg.trackGame ? 1 : 0,
         cfg.onlyWithGame ? 1 : 0, cfg.onlyWhenFocused ? 1 : 0, cfg.offerPawnIOInstall ? 1 : 0);
     if (len <= 0 || len >= (int)sizeof(buf)) return false;
+    std::ostringstream extra;
+    extra << "\r\n[Alerts]\r\nEnabled=" << cfg.alertsEnabled << "\r\n";
+    for (size_t i = 0; i < kMetricCount; ++i) extra << kMetricKeys[i] << '=' << cfg.alertLimits[i] << "\r\n";
+    std::string output(buf, len);
+    output.insert(output.find("[Metrics]"), "LayoutVersion=2\r\nSingleLine=" + std::to_string(cfg.singleLine) +
+                  "\r\nItemsPerRow=" + std::to_string(cfg.itemsPerRow) +
+                  "\r\nModuleGap=" + std::to_string(cfg.moduleGap) +
+                  "\r\nRowGap=" + std::to_string(cfg.rowGap) +
+                  "\r\nEnglishMetrics=" + std::to_string(cfg.englishMetrics) + "\r\n\r\n");
+    output.insert(output.find("[Metrics]"), "StartupDefaultApplied=" + std::to_string(cfg.startupDefaultApplied) + "\r\n\r\n");
+    output += extra.str();
 
     HANDLE f = CreateFileW(path.c_str(), GENERIC_WRITE, 0, nullptr, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
     if (f == INVALID_HANDLE_VALUE) return false;
     DWORD written = 0;
-    BOOL ok = WriteFile(f, buf, (DWORD)len, &written, nullptr);
+    BOOL ok = WriteFile(f, output.data(), (DWORD)output.size(), &written, nullptr);
     CloseHandle(f);
-    return ok && written == (DWORD)len;
+    return ok && written == (DWORD)output.size();
 }
 
 bool ParseHotkey(const std::string& text, UINT& mods, UINT& vk) {

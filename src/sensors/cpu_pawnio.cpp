@@ -190,11 +190,13 @@ std::optional<float> CpuPawnIO::AmdTemperature() {
 std::optional<float> CpuPawnIO::IntelTemperature() {
     uint64_t raw = 0;
     if (intelPackageTemp_) {
-        if (!ReadMsr(kIntelMsrPackageThermStatus, raw)) return std::nullopt;
-    } else {
-        // No package sensor: fall back to the core this thread happens to run on.
-        if (!ReadMsr(kIntelMsrThermStatus, raw) || !(raw & (1ull << 31))) return std::nullopt;
+        // Bit 31 says whether the digital reading is valid. An invalid package
+        // value can have a zero delta and otherwise look like a 100 C reading.
+        if (ReadMsr(kIntelMsrPackageThermStatus, raw) && (raw & (1ull << 31)))
+            return tjMax_ - float((raw >> 16) & 0x7F);
     }
+    // No valid package sensor: use the core this thread currently runs on.
+    if (!ReadMsr(kIntelMsrThermStatus, raw) || !(raw & (1ull << 31))) return std::nullopt;
     return tjMax_ - float((raw >> 16) & 0x7F);
 }
 

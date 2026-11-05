@@ -30,9 +30,9 @@ constexpr UINT WM_APP_FOREGROUND = WM_APP + 5;
 constexpr int kHotkeyId = 1;
 constexpr UINT_PTR kTopmostTimer = 1;
 constexpr UINT kTrayIconId = 1;
-enum : UINT { ID_TRAY_SETTINGS = 100, ID_TRAY_EXIT };
+enum : UINT { ID_TRAY_SETTINGS = 100, ID_TRAY_EXIT, ID_TRAY_TOGGLE };
 
-const wchar_t kTrayWindowClass[] = L"FpsMonitorTrayWindow";
+const wchar_t kTrayWindowClass[] = L"MiniHUDTrayWindow";
 
 struct App {
     std::wstring configPath;
@@ -51,6 +51,8 @@ struct App {
     ImVec2 statsSize = ImVec2(0, 0); // stats panel size from the last frame
     HWND previousForeground = nullptr;
     bool hotkeyRegistered = false;
+    bool hudVisible = true; // manual visibility; hotkey and tray work even while hidden
+    bool trayIconAdded = false;
     bool dirty = true;
     HANDLE graphTimer = nullptr; // paces graph redraws while fast graph updates are on
     bool graphTimerArmed = false;
@@ -69,31 +71,38 @@ HICON LoadTrayIcon(HINSTANCE instance) {
 }
 
 void AddTrayIcon(App& app) {
+    if (app.trayIconAdded || !app.hudVisible) return;
     NOTIFYICONDATAW nid = {sizeof(nid)};
     nid.hWnd = app.trayWnd;
     nid.uID = kTrayIconId;
     nid.uFlags = NIF_MESSAGE | NIF_ICON | NIF_TIP | NIF_SHOWTIP;
     nid.uCallbackMessage = WM_APP_TRAY;
     nid.hIcon = app.icon;
-    wcscpy_s(nid.szTip, L"FPS Monitor");
-    Shell_NotifyIconW(NIM_ADD, &nid);
+    wcscpy_s(nid.szTip, L"MiniHUD");
+    app.trayIconAdded=Shell_NotifyIconW(NIM_ADD, &nid)!=FALSE;
     nid.uVersion = NOTIFYICON_VERSION_4;
     Shell_NotifyIconW(NIM_SETVERSION, &nid);
 }
 
 void RemoveTrayIcon(App& app) {
+    if (!app.trayIconAdded) return;
     NOTIFYICONDATAW nid = {sizeof(nid)};
     nid.hWnd = app.trayWnd;
     nid.uID = kTrayIconId;
     Shell_NotifyIconW(NIM_DELETE, &nid);
+    app.trayIconAdded=false;
 }
 
-void RegisterSettingsHotkey(App& app) {
+void RegisterHudHotkey(App& app) {
     if (app.hotkeyRegistered) UnregisterHotKey(app.trayWnd, kHotkeyId);
     app.hotkeyRegistered = false;
     UINT mods = 0, vk = 0;
     if (ParseHotkey(app.cfg.hotkey, mods, vk))
         app.hotkeyRegistered = RegisterHotKey(app.trayWnd, kHotkeyId, mods | MOD_NOREPEAT, vk) != FALSE;
+    if (!app.hotkeyRegistered) {
+        app.hudVisible=true;
+        AddTrayIcon(app); // avoid an invisible app with no working way to summon it
+    }
 }
 
 RECT MonitorRect(App& app) {
@@ -127,10 +136,11 @@ void UpdateBounds(App& app) {
     app.dirty = true; // redraw at the new size
 }
 
-// ShowOnlyWithGame hides the overlay until a game is tracked, and ShowOnlyWhenGameFocused also
-// while that game is in the background. Settings always shows it.
+// The settings window stays accessible; manual HUD visibility and game filters control the card.
 bool OverlayVisible(const App& app) {
-    if (app.settings.open || !app.cfg.onlyWithGame) return true;
+    if (app.settings.open) return true; // the settings window stays usable while the HUD is hidden
+    if (!app.hudVisible) return false;
+    if (!app.cfg.onlyWithGame) return true;
     if (!app.snapshot.gameTracked) return false;
     if (!app.cfg.onlyWhenFocused) return true;
     DWORD fgPid = 0;
@@ -168,6 +178,9 @@ uint32_t MetricMask(const Config& c) {
     if (c.showGpuPower) m |= kMetricGpuPower;
     if (c.showVram) m |= kMetricVram;
     if (c.showRam) m |= kMetricRam;
+    if (c.showDiskTemp) m |= kMetricDiskTemp;
+    if (c.showDiskSpeed) m |= kMetricDiskSpeed;
+    if (c.showNetworkSpeed) m |= kMetricNetworkSpeed;
     if (c.showFrameGraph) m |= kMetricFps | kMetricFrameGraph;
     if (c.showFrameGraph && c.fastFrameGraph) m |= kMetricFastGraph;
     return m;
@@ -178,6 +191,7 @@ uint32_t MetricMask(const Config& c) {
 void UpdateMetricMask(App& app, bool force) {
     const bool visible = OverlayVisible(app);
     uint32_t mask = visible || app.snapshot.gameTracked ? MetricMask(app.cfg) : kMetricFps;
+    if (!app.hudVisible && !app.settings.open) mask = 0;
     if (!visible) mask &= ~kMetricFastGraph; // nobody sees the graph
 
     if (!force && mask == app.metricMask) return;
@@ -201,6 +215,7 @@ void RenderFrame(App& app);
 
 void OpenSettings(App& app) {
     if (app.settings.open) return;
+    app.settings.startup=QueryStartup();
     app.previousForeground = GetForegroundWindow();
     app.monitors = EnumerateMonitors();
     std::snprintf(app.settings.hotkeyBuf, sizeof(app.settings.hotkeyBuf), "%s", app.cfg.hotkey.c_str());
@@ -219,7 +234,7 @@ void CloseSettings(App& app) {
     // would show the panel at the monitor's top-left corner until the window is resized.
     UpdateBounds(app);
     SaveConfig(app.configPath, app.cfg);
-    RegisterSettingsHotkey(app);
+    RegisterHudHotkey(app);
 
     if (app.previousForeground && IsWindow(app.previousForeground)) SetForegroundWindow(app.previousForeground);
     app.previousForeground = nullptr;
@@ -246,11 +261,10 @@ void OfferPawnIOInstall(App& app) {
 
     std::string installed = InstalledPawnIOVersion();
     std::wstring text = installed.empty()
-        ? L"Reading the CPU temperature and power needs the PawnIO driver (signed, open source: pawnio.eu).\n\n"
-        : L"The installed PawnIO driver is outdated and cannot read the CPU temperature and power.\n\n";
-    text += L"Install it now? This takes a few seconds.\n\n"
-            L"Choose No to skip. You can install it later from the settings panel.";
-    if (MessageBoxW(nullptr, text.c_str(), L"FPS Monitor", MB_YESNO | MB_ICONQUESTION | MB_SETFOREGROUND) == IDYES) {
+        ? L"读取 CPU 温度和功耗需要 PawnIO 驱动（来源：pawnio.eu）。\n\n"
+        : L"已安装的 PawnIO 驱动版本过旧，无法读取 CPU 温度和功耗。\n\n";
+    text += L"现在安装吗？需要管理员权限。\n\n选择“否”跳过，可稍后从设置中安装。";
+    if (MessageBoxW(nullptr, text.c_str(), L"MiniHUD", MB_YESNO | MB_ICONQUESTION | MB_SETFOREGROUND) == IDYES) {
         StartPawnIOInstall(app);
     } else {
         app.cfg.offerPawnIOInstall = false;
@@ -264,11 +278,21 @@ void Quit(App& app) {
     PostQuitMessage(0);
 }
 
+void ToggleHud(App& app) {
+    app.hudVisible = !app.hudVisible;
+    if (app.hudVisible) AddTrayIcon(app);
+    else RemoveTrayIcon(app);
+    app.dirty = true;
+    UpdateMetricMask(app, true);
+    if (!OverlayVisible(app)) app.overlay.SetVisible(false);
+}
+
 void ShowTrayMenu(App& app) {
     HMENU menu = CreatePopupMenu();
-    AppendMenuW(menu, MF_STRING, ID_TRAY_SETTINGS, L"Settings...");
+    AppendMenuW(menu, MF_STRING, ID_TRAY_SETTINGS, L"设置...");
+    AppendMenuW(menu, MF_STRING | (app.hotkeyRegistered ? 0 : MF_GRAYED), ID_TRAY_TOGGLE, app.hudVisible ? L"隐藏小黑条" : L"显示小黑条");
     AppendMenuW(menu, MF_SEPARATOR, 0, nullptr);
-    AppendMenuW(menu, MF_STRING, ID_TRAY_EXIT, L"Exit");
+    AppendMenuW(menu, MF_STRING, ID_TRAY_EXIT, L"退出");
     POINT pt;
     GetCursorPos(&pt);
     SetForegroundWindow(app.trayWnd); // required so the menu closes when clicking elsewhere
@@ -276,6 +300,7 @@ void ShowTrayMenu(App& app) {
     PostMessageW(app.trayWnd, WM_NULL, 0, 0); // lets the menu close properly next time (see TrackPopupMenu docs)
     DestroyMenu(menu);
     if (cmd == ID_TRAY_SETTINGS) OpenSettings(app);
+    else if (cmd == ID_TRAY_TOGGLE) ToggleHud(app);
     else if (cmd == ID_TRAY_EXIT) Quit(app);
 }
 
@@ -283,12 +308,13 @@ LRESULT CALLBACK TrayWndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
     App* app = g_app;
     if (app) {
         if (msg == app->taskbarCreatedMsg && msg != 0) {
+            app->trayIconAdded=false;
             AddTrayIcon(*app); // Explorer restarted
             return 0;
         }
         switch (msg) {
         case WM_HOTKEY:
-            if (wp == kHotkeyId) app->settings.open ? CloseSettings(*app) : OpenSettings(*app);
+            if (wp == kHotkeyId) ToggleHud(*app);
             return 0;
         case WM_APP_OPEN_SETTINGS:
             OpenSettings(*app);
@@ -354,7 +380,7 @@ void RenderFrame(App& app) {
         pos.x = pivot.x == 0.0f ? (float)app.cfg.offsetX : float(b.right - b.left - app.cfg.offsetX);
         pos.y = pivot.y == 0.0f ? (float)app.cfg.offsetY : float(b.bottom - b.top - app.cfg.offsetY);
     }
-    app.statsSize = DrawStats(app.cfg, app.snapshot, pos, pivot);
+    if (app.hudVisible) app.statsSize = DrawStats(app.cfg, app.snapshot, pos, pivot);
 
     UiAction action = UiAction::None;
     if (app.settings.open) action = DrawSettings(app.cfg, app.snapshot, app.monitors, app.settings);
@@ -367,6 +393,17 @@ void RenderFrame(App& app) {
     if (action == UiAction::CloseSettings) CloseSettings(app);
     else if (action == UiAction::ExitApp) Quit(app);
     else if (action == UiAction::InstallPawnIO) StartPawnIOInstall(app);
+    else if (action == UiAction::EnableStartup || action == UiAction::DisableStartup) {
+        std::string error;
+        const bool enable=action==UiAction::EnableStartup;
+        const bool ok=SetStartup(enable,error);
+        if (ok) {
+            app.cfg.startupDefaultApplied=true;
+            SaveConfig(app.configPath,app.cfg);
+        }
+        app.settings.startup=QueryStartup();
+        app.settings.startupMessage=ok ? (enable ? "已启用当前用户登录自启动。" : "已关闭登录自启动。") : error;
+    }
 }
 
 // Fast graph updates redraw the graph at a steady pace, so it scrolls smoothly. A high-resolution
@@ -401,18 +438,32 @@ bool PumpMessages(App& app, bool wait) {
 } // namespace
 
 int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int) {
-    HANDLE singleInstance = CreateMutexW(nullptr, TRUE, L"Local\\FpsMonitorOverlaySingleInstance");
+    bool autoStart=false;
+    int argc=0;
+    if (LPWSTR* args=CommandLineToArgvW(GetCommandLineW(),&argc)) {
+        for (int i=1;i<argc;++i) if (_wcsicmp(args[i],L"--autostart")==0) autoStart=true;
+        LocalFree(args);
+    }
+    HANDLE singleInstance = CreateMutexW(nullptr, TRUE, L"Local\\MiniHUDOverlaySingleInstance");
     if (GetLastError() == ERROR_ALREADY_EXISTS) {
-        if (HWND other = FindWindowW(kTrayWindowClass, nullptr)) PostMessageW(other, WM_APP_OPEN_SETTINGS, 0, 0);
+        if (!autoStart) if (HWND other = FindWindowW(kTrayWindowClass, nullptr)) PostMessageW(other, WM_APP_OPEN_SETTINGS, 0, 0);
         return 0;
     }
 
     SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
 
     App app;
+    app.hudVisible=true; // both manual launch and login startup show the HUD
     g_app = &app;
     app.configPath = DefaultConfigPath();
     if (!LoadConfig(app.configPath, app.cfg)) SaveConfig(app.configPath, app.cfg);
+    if (!app.cfg.startupDefaultApplied) {
+        std::string error;
+        if (SetStartup(true,error)) {
+            app.cfg.startupDefaultApplied=true;
+            SaveConfig(app.configPath,app.cfg);
+        } else app.settings.startupMessage=error;
+    }
     app.applied = app.cfg;
 
     // Hidden window that owns the tray icon and the global hotkey.
@@ -422,22 +473,24 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int) {
     wc.hIcon = LoadIconW(instance, MAKEINTRESOURCEW(IDI_APP_ICON));
     wc.lpszClassName = kTrayWindowClass;
     RegisterClassExW(&wc);
-    app.trayWnd = CreateWindowExW(WS_EX_TOOLWINDOW, kTrayWindowClass, L"FPS Monitor", WS_POPUP, 0, 0, 0, 0, nullptr,
+    app.trayWnd = CreateWindowExW(WS_EX_TOOLWINDOW, kTrayWindowClass, L"MiniHUD", WS_POPUP, 0, 0, 0, 0, nullptr,
                                   nullptr, instance, nullptr);
     app.taskbarCreatedMsg = RegisterWindowMessageW(L"TaskbarCreated");
     app.icon = LoadTrayIcon(instance);
 
     if (!app.overlay.Create(instance, [&app](HWND h, UINT m, WPARAM w, LPARAM l) { return OverlayMessage(app, h, m, w, l); })) {
-        MessageBoxW(nullptr, L"Failed to create the Direct3D 11 overlay window.", L"FPS Monitor", MB_ICONERROR);
+        MessageBoxW(nullptr, L"无法创建 Direct3D 11 叠加窗口。", L"MiniHUD", MB_ICONERROR);
         return 1;
     }
     ApplyConfig(app, true);
     UpdateBounds(app);
     AddTrayIcon(app);
-    RegisterSettingsHotkey(app);
+    RegisterHudHotkey(app);
     if (!app.hotkeyRegistered) {
-        std::wstring text = L"Could not register the settings hotkey. Use the tray icon to open settings.";
-        MessageBoxW(nullptr, text.c_str(), L"FPS Monitor", MB_ICONWARNING);
+        app.hudVisible=true; // keep an accessible tray fallback if the shortcut is unavailable
+        AddTrayIcon(app);
+        std::wstring text = L"显示/隐藏快捷键被占用，请通过托盘菜单切换小黑条。";
+        MessageBoxW(nullptr, text.c_str(), L"MiniHUD", MB_ICONWARNING);
     }
     OfferPawnIOInstall(app);
     SetTimer(app.overlay.Hwnd(), kTopmostTimer, 1000, nullptr);

@@ -29,6 +29,11 @@ struct SensorSnapshot {
     std::optional<float> vramTotalGB;
     std::optional<float> ramUsedGB;
     std::optional<float> ramTotalGB;
+    std::optional<float> diskTemp;
+    std::optional<float> diskReadMBps;
+    std::optional<float> diskWriteMBps;
+    std::optional<float> networkDownMBps;
+    std::optional<float> networkUpMBps;
     std::vector<float> frameTimesMs; // FPS target's recent frame times (ms), oldest first
     int64_t lastFrameQpc = 0;        // QueryPerformanceCounter time at which the newest one ended
 
@@ -43,6 +48,8 @@ struct SensorSnapshot {
     bool cpuNeedsDriver = false; // PawnIO missing or outdated
     std::string gpuName;
     std::string gpuStatus;
+    std::string diskName;
+    std::string diskStatus;
 };
 
 // Metrics currently shown on the overlay. Hidden metrics are not polled at all.
@@ -58,6 +65,9 @@ enum MetricBits : uint32_t {
     kMetricRam = 1u << 8,
     kMetricFrameGraph = 1u << 9,
     kMetricFastGraph = 1u << 10, // refresh the frame time graph every kFastGraphPeriodMs
+    kMetricDiskTemp = 1u << 11,
+    kMetricDiskSpeed = 1u << 12,
+    kMetricNetworkSpeed = 1u << 13,
 };
 
 // Polls the shown sensors on a background thread and posts `notifyMsg` to `notifyWnd`

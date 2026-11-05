@@ -1,6 +1,7 @@
 #include "overlay_ui.h"
 
 #include "pawnio_setup.h"
+#include "sensors/system_io.h"
 #include "util.h"
 
 #include <imgui_internal.h>
@@ -13,12 +14,8 @@
 namespace {
 
 const ImVec4 kFpsColor(0.56f, 0.87f, 0.36f, 1.0f);
-const ImVec4 kCpuColor(0.38f, 0.74f, 1.0f, 1.0f);
-const ImVec4 kGpuColor(1.0f, 0.62f, 0.26f, 1.0f);
-const ImVec4 kRamColor(0.78f, 0.6f, 1.0f, 1.0f);
 const ImVec4 kValueColor(0.96f, 0.96f, 0.96f, 1.0f);
 const ImVec4 kMissingColor(0.6f, 0.6f, 0.6f, 1.0f);
-const ImVec4 kWarmColor(1.0f, 0.85f, 0.3f, 1.0f);
 const ImVec4 kHotColor(1.0f, 0.35f, 0.3f, 1.0f);
 
 // How far behind real time the frame graph is drawn. Fast graph updates flush ETW every ~33-47 ms,
@@ -28,65 +25,6 @@ constexpr double kGraphDelayMs = 120.0;
 constexpr float kGraphZero = 0.1f;
 // Frame time at the top of the frame graph.
 constexpr float kGraphMaxMs = 60.0f;
-
-// Widest text a memory row can show; sizes the panel so it does not jitter.
-const char* const kMemorySample = "000.0 / 000.0 GB";
-
-struct Cell {
-    std::string text;
-    ImVec4 color;
-};
-
-struct Row {
-    const char* label = "";
-    ImVec4 labelColor;
-    Cell cells[3];
-    int count = 0;
-    bool span = false; // a single value right-aligned across all value columns (memory rows)
-
-    void Add(std::string text, ImVec4 color) { cells[count++] = {std::move(text), color}; }
-};
-
-std::string Format(const char* fmt, float v) {
-    char buf[32];
-    std::snprintf(buf, sizeof(buf), fmt, v);
-    return buf;
-}
-
-void AddUsage(Row& row, const std::optional<float>& v) {
-    if (v) row.Add(Format("%.0f%%", *v), kValueColor);
-    else row.Add("N/A", kMissingColor);
-}
-
-void AddTemp(Row& row, const std::optional<float>& celsius, bool fahrenheit) {
-    if (!celsius) {
-        row.Add("N/A", kMissingColor);
-        return;
-    }
-    const float c = *celsius;
-    const ImVec4 color = c >= 85.0f ? kHotColor : c >= 70.0f ? kWarmColor : kValueColor;
-    row.Add(fahrenheit ? Format("%.0f\xC2\xB0""F", c * 9.0f / 5.0f + 32.0f) : Format("%.0f\xC2\xB0""C", c), color);
-}
-
-void AddPower(Row& row, const std::optional<float>& watts) {
-    if (watts) row.Add(Format("%.0f W", *watts), kValueColor);
-    else row.Add("N/A", kMissingColor);
-}
-
-Row MemoryRow(const char* label, ImVec4 labelColor, const std::optional<float>& usedGB, const std::optional<float>& totalGB) {
-    Row r;
-    r.label = label;
-    r.labelColor = labelColor;
-    r.span = true;
-    if (!usedGB || !totalGB || *totalGB <= 0.0f) {
-        r.Add("N/A", kMissingColor);
-        return r;
-    }
-    char buf[48];
-    std::snprintf(buf, sizeof(buf), "%.1f / %.1f GB", *usedGB, *totalGB);
-    r.Add(buf, *usedGB / *totalGB >= 0.9f ? kWarmColor : kValueColor);
-    return r;
-}
 
 // Frame times over the last kFrameGraphSeconds, newest at the right edge. Each frame spans its
 // duration on the time axis, and a pixel column shows the slowest frame in it, so spikes stay visible.
@@ -212,270 +150,231 @@ ImVec2 CornerPivot(Corner c) {
     return {1.0f, 0.0f};
 }
 
+namespace {
+struct HudItem { std::string label, text; ImVec4 color; };
+const char* const metricLabels[] = {"帧率", "帧时间", "CPU 占用", "CPU 温度", "GPU 占用", "GPU 温度",
+    "CPU 功耗", "GPU 功耗", "显存", "内存", "SSD 温度", "磁盘读取", "磁盘写入", "下载", "上传"};
+const char* const englishLabels[] = {"FPS", "Frame Time", "CPU Load", "CPU Temp", "GPU Load", "GPU Temp",
+    "CPU Power", "GPU Power", "VRAM", "RAM", "SSD Temp", "Disk Read", "Disk Write", "Down", "Up"};
+const char* const metricUnits[] = {"低于 FPS", "达到 ms", "达到 %", "达到 ℃", "达到 %", "达到 ℃",
+    "达到 W", "达到 W", "达到 %", "达到 %", "达到 ℃", "达到 MB/s", "达到 MB/s", "达到 MB/s", "达到 MB/s"};
+std::string StatusText(const std::string& text) {
+    if (text.find("not installed") != std::string::npos) return "未安装 PawnIO 驱动";
+    if (text.find("access denied") != std::string::npos) return "权限不足，请以管理员身份运行";
+    if (text.find("PawnIO OK") != std::string::npos) return "PawnIO 正常（Intel 支持为实验性）";
+    if (text.find("NVML OK") != std::string::npos) return "NVIDIA NVML 正常";
+    if (text.find("session running") != std::string::npos) return "ETW 帧率采集运行中";
+    if (text.find("No storage") != std::string::npos) return "设备未提供温度数据";
+    if (text.find("Windows storage") != std::string::npos) return "Windows 存储温度采集正常";
+    if (text.empty()) return "等待数据";
+    return "诊断信息：" + text;
+}
+}
+
 ImVec2 DrawStats(const Config& cfg, const SensorSnapshot& snap, ImVec2 pos, ImVec2 pivot) {
-    Row rows[5];
-    int rowCount = 0;
-
-    if (cfg.showFps || cfg.showFrameTime) {
-        Row& r = rows[rowCount++];
-        r.label = "FPS";
-        r.labelColor = kFpsColor;
-        if (cfg.showFps) {
-            if (snap.fps) r.Add(Format("%.0f", *snap.fps), kValueColor);
-            else r.Add("--", kMissingColor);
+    std::vector<HudItem> items;
+    auto add = [&](Metric metric, const std::optional<float>& value, const char* format) {
+        const size_t index = static_cast<size_t>(metric);
+        char text[80];
+        if (value) std::snprintf(text, sizeof(text), format, *value);
+        else std::snprintf(text, sizeof(text), "--");
+        items.push_back({cfg.englishMetrics ? englishLabels[index] : metricLabels[index], text,
+            !value ? kMissingColor : MetricAlert(cfg.alertsEnabled, metric, *value, cfg.alertLimits[index]) ? kHotColor : kValueColor});
+    };
+    auto temp = [&](Metric metric, const std::optional<float>& value) {
+        add(metric, value, "%.0f C");
+        if (value && cfg.fahrenheit) {
+            char text[32]; std::snprintf(text, sizeof(text), "%.0f F", *value * 1.8f + 32);
+            items.back().text = text;
         }
-        if (cfg.showFrameTime) {
-            if (snap.frameTimeMs) r.Add(Format("%.1f ms", *snap.frameTimeMs), kValueColor);
-            else r.Add("-- ms", kMissingColor);
+    };
+    auto memory = [&](Metric metric, const std::optional<float>& used, const std::optional<float>& total) {
+        const std::optional<float> percent = used && total && *total > 0 ? std::optional<float>(*used / *total * 100) : std::nullopt;
+        add(metric, percent, "%.0f%%");
+        if (percent) {
+            char text[64]; std::snprintf(text, sizeof(text), "%.1f / %.1f GB", *used, *total);
+            items.back().text = text;
         }
+    };
+    if (cfg.showFps) add(Metric::Fps, snap.fps, "%.0f");
+    if (cfg.showFrameTime) add(Metric::FrameTime, snap.frameTimeMs, "%.1f ms");
+    if (cfg.showCpuUsage) add(Metric::CpuUsage, snap.cpuUsage, "%.0f%%");
+    if (cfg.showCpuTemp) temp(Metric::CpuTemp, snap.cpuTemp);
+    if (cfg.showGpuUsage) add(Metric::GpuUsage, snap.gpuUsage, "%.0f%%");
+    if (cfg.showGpuTemp) temp(Metric::GpuTemp, snap.gpuTemp);
+    if (cfg.showCpuPower) add(Metric::CpuPower, snap.cpuPowerW, "%.0f W");
+    if (cfg.showGpuPower) add(Metric::GpuPower, snap.gpuPowerW, "%.0f W");
+    if (cfg.showVram) memory(Metric::Vram, snap.vramUsedGB, snap.vramTotalGB);
+    if (cfg.showRam) memory(Metric::Ram, snap.ramUsedGB, snap.ramTotalGB);
+    if (cfg.showDiskTemp) temp(Metric::DiskTemp, snap.diskTemp);
+    if (cfg.showDiskSpeed) {
+        add(Metric::DiskRead, snap.diskReadMBps, "%.1f MB/s");
+        add(Metric::DiskWrite, snap.diskWriteMBps, "%.1f MB/s");
     }
-    if (cfg.showCpuUsage || cfg.showCpuTemp || cfg.showCpuPower) {
-        Row& r = rows[rowCount++];
-        r.label = "CPU";
-        r.labelColor = kCpuColor;
-        if (cfg.showCpuUsage) AddUsage(r, snap.cpuUsage);
-        if (cfg.showCpuTemp) AddTemp(r, snap.cpuTemp, cfg.fahrenheit);
-        if (cfg.showCpuPower) AddPower(r, snap.cpuPowerW);
+    if (cfg.showNetworkSpeed) {
+        add(Metric::NetDown, snap.networkDownMBps, "%.1f MB/s");
+        add(Metric::NetUp, snap.networkUpMBps, "%.1f MB/s");
     }
-    if (cfg.showGpuUsage || cfg.showGpuTemp || cfg.showGpuPower) {
-        Row& r = rows[rowCount++];
-        r.label = "GPU";
-        r.labelColor = kGpuColor;
-        if (cfg.showGpuUsage) AddUsage(r, snap.gpuUsage);
-        if (cfg.showGpuTemp) AddTemp(r, snap.gpuTemp, cfg.fahrenheit);
-        if (cfg.showGpuPower) AddPower(r, snap.gpuPowerW);
-    }
-    if (cfg.showVram) rows[rowCount++] = MemoryRow("VRAM", kGpuColor, snap.vramUsedGB, snap.vramTotalGB);
-    if (cfg.showRam) rows[rowCount++] = MemoryRow("RAM", kRamColor, snap.ramUsedGB, snap.ramTotalGB);
-    if (rowCount == 0 && !cfg.showFrameGraph) return ImVec2(0, 0);
-
-    const ImGuiStyle& style = ImGui::GetStyle();
-    ImVec2 size(0, 0);
-
-    ImGui::PushFont(nullptr, style.FontSizeBase * cfg.fontScale);
-    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding,
-                        ImVec2(style.WindowPadding.x * cfg.fontScale, style.WindowPadding.y * 0.8f * cfg.fontScale));
-    ImGui::PushStyleVar(ImGuiStyleVar_CellPadding, ImVec2(style.CellPadding.x * 2.0f * cfg.fontScale, 1.0f * cfg.fontScale));
+    if (items.empty() && !cfg.showFrameGraph) return {};
+    const float fontSize = ImGui::GetStyle().FontSizeBase * cfg.fontScale;
+    ImGui::PushFont(nullptr, fontSize);
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(9, 5));
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 0);
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0);
     ImGui::SetNextWindowPos(pos, ImGuiCond_Always, pivot);
     ImGui::SetNextWindowBgAlpha(cfg.backgroundAlpha);
-
-    const ImGuiWindowFlags flags = ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_AlwaysAutoResize |
-                                   ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoFocusOnAppearing |
-                                   ImGuiWindowFlags_NoNav | ImGuiWindowFlags_NoInputs | ImGuiWindowFlags_NoMove |
-                                   ImGuiWindowFlags_NoBringToFrontOnFocus;
+    ImVec2 size{};
+    const auto flags = ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_AlwaysAutoResize |
+        ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoInputs | ImGuiWindowFlags_NoFocusOnAppearing;
     if (ImGui::Begin("##stats", nullptr, flags)) {
-        // Fixed column widths so the panel does not jitter as numbers change.
-        float cellWidth = 0.0f;
-        for (const char* sample : {"0000", "100%", "99.9 ms", "100\xC2\xB0""C", "212\xC2\xB0""F", "000 W", "N/A"})
-            cellWidth = std::max(cellWidth, ImGui::CalcTextSize(sample).x);
-        float labelWidth = 0.0f;
-        int columns = 0;
-        bool anySpan = false;
-        for (int i = 0; i < rowCount; ++i) {
-            labelWidth = std::max(labelWidth, ImGui::CalcTextSize(rows[i].label).x);
-            if (rows[i].span) anySpan = true;
-            else columns = std::max(columns, rows[i].count);
-        }
-        columns = std::max(columns, 1);
-
-        // Memory rows span every value column; widen the last column if they would not fit.
-        const float cellGap = ImGui::GetStyle().CellPadding.x * 2.0f;
-        float lastWidth = cellWidth;
-        if (anySpan) {
-            const float valueArea = columns * cellWidth + (columns - 1) * cellGap;
-            lastWidth += std::max(0.0f, ImGui::CalcTextSize(kMemorySample).x - valueArea);
-        }
-        auto columnWidth = [&](int c) { return c == columns - 1 ? lastWidth : cellWidth; };
-
-        const ImGuiTableFlags tableFlags = ImGuiTableFlags_SizingFixedFit | ImGuiTableFlags_NoPadOuterX |
-                                           ImGuiTableFlags_NoClip; // lets span rows overflow leftwards
-        float contentWidth = ImGui::GetFontSize() * 9.0f; // graph width when there are no rows
-        if (rowCount > 0 && ImGui::BeginTable("##t", 1 + columns, tableFlags)) {
-            ImGui::TableSetupColumn("##label", ImGuiTableColumnFlags_WidthFixed, labelWidth);
-            for (int c = 0; c < columns; ++c) ImGui::TableSetupColumn("##v", ImGuiTableColumnFlags_WidthFixed, columnWidth(c));
-
-            // Right-aligns `text` to the right edge of value column `c` (may extend left of it).
-            auto rightAligned = [&](int c, const Cell& cell) {
-                ImGui::TableSetColumnIndex(1 + c);
-                const float w = ImGui::CalcTextSize(cell.text.c_str()).x;
-                ImGui::SetCursorPosX(ImGui::GetCursorPosX() + columnWidth(c) - w);
-                ImGui::TextColored(cell.color, "%s", cell.text.c_str());
-            };
-
-            for (int i = 0; i < rowCount; ++i) {
-                const Row& r = rows[i];
-                ImGui::TableNextRow();
-                ImGui::TableSetColumnIndex(0);
-                ImGui::TextColored(r.labelColor, "%s", r.label);
-                if (r.span) {
-                    rightAligned(columns - 1, r.cells[0]);
-                } else {
-                    for (int c = 0; c < r.count; ++c) rightAligned(c, r.cells[c]);
-                }
+        const ImVec2 start = ImGui::GetCursorPos();
+        float x = 0, width = 0;
+        int row = 0, col = 0;
+        const float height = ImGui::GetTextLineHeight() + cfg.rowGap;
+        const float available = std::max(100.0f, ImGui::GetIO().DisplaySize.x - 18.0f);
+        for (const auto& item : items) {
+            const float itemWidth = ImGui::CalcTextSize(item.label.c_str()).x + 7 +
+                ImGui::CalcTextSize(item.text.c_str()).x;
+            if (col && ((!cfg.singleLine && col >= cfg.itemsPerRow) || x + itemWidth > available)) {
+                width = std::max(width, x - cfg.moduleGap); x = 0; ++row; col = 0;
             }
-            // The table's natural width; its outer rect would stretch to the (auto-sized) window.
-            contentWidth = ImGui::GetCurrentTable()->ColumnsAutoFitWidth;
-            ImGui::EndTable();
+            ImGui::SetCursorPos(ImVec2(start.x + x, start.y + row * height));
+            ImGui::TextColored(ImVec4(.64f,.67f,.70f,1), "%s", item.label.c_str());
+            ImGui::SameLine(0, 7);
+            ImGui::TextColored(item.color, "%s", item.text.c_str());
+            x += itemWidth + cfg.moduleGap; ++col;
         }
-        if (cfg.showFrameGraph) DrawFrameGraph(snap, std::round(contentWidth));
+        width = std::max(width, x > 0 ? x - cfg.moduleGap : 180);
+        ImGui::SetCursorPos(start);
+        ImGui::Dummy(ImVec2(width, items.empty() ? 0 : (row + 1) * height - cfg.rowGap));
+        if (cfg.showFrameGraph) DrawFrameGraph(snap, width);
         size = ImGui::GetWindowSize();
     }
-    ImGui::End();
-    ImGui::PopStyleVar(2);
-    ImGui::PopFont();
+    ImGui::End(); ImGui::PopStyleVar(3); ImGui::PopFont();
     return size;
 }
 
-UiAction DrawSettings(Config& cfg, const SensorSnapshot& snap, const std::vector<MonitorInfo>& monitors,
-                      SettingsState& state) {
+UiAction DrawSettings(Config& cfg, const SensorSnapshot& snap, const std::vector<MonitorInfo>& monitors, SettingsState& state) {
     UiAction action = UiAction::None;
-    const ImVec2 display = ImGui::GetIO().DisplaySize;
-    // Esc while editing a field (the hotkey) only cancels the edit. Checked before the widgets
-    // handle Esc, which deactivates them.
+    const auto display = ImGui::GetIO().DisplaySize;
     const bool editing = ImGui::IsAnyItemActive();
-
-    ImGui::SetNextWindowPos(ImVec2(display.x * 0.5f, display.y * 0.5f), ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
-    ImGui::SetNextWindowBgAlpha(0.96f);
+    ImGui::SetNextWindowPos(ImVec2(display.x/2, display.y/2), ImGuiCond_Appearing, ImVec2(.5f,.5f));
+    ImGui::SetNextWindowSize(ImVec2(600, std::min(display.y - 40, 690.0f)), ImGuiCond_Appearing);
     bool open = true;
-    if (ImGui::Begin("FPS Monitor Settings", &open,
-                     ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoSavedSettings)) {
-        const float fieldWidth = ImGui::GetFontSize() * 14.0f;
-
-        ImGui::SeparatorText("Displayed values");
-        if (ImGui::BeginTable("##metrics", 2)) {
-            ImGui::TableNextColumn(); ImGui::Checkbox("FPS", &cfg.showFps);
-            ImGui::TableNextColumn(); ImGui::Checkbox("Frame time", &cfg.showFrameTime);
-            ImGui::TableNextColumn(); ImGui::Checkbox("CPU usage", &cfg.showCpuUsage);
-            ImGui::TableNextColumn(); ImGui::Checkbox("CPU temperature", &cfg.showCpuTemp);
-            ImGui::TableNextColumn(); ImGui::Checkbox("GPU usage", &cfg.showGpuUsage);
-            ImGui::TableNextColumn(); ImGui::Checkbox("GPU temperature", &cfg.showGpuTemp);
-            ImGui::TableNextColumn(); ImGui::Checkbox("CPU power", &cfg.showCpuPower);
-            ImGui::TableNextColumn(); ImGui::Checkbox("GPU power", &cfg.showGpuPower);
-            ImGui::TableNextColumn(); ImGui::Checkbox("RAM used / total", &cfg.showRam);
-            ImGui::TableNextColumn(); ImGui::Checkbox("VRAM used / total", &cfg.showVram);
-            ImGui::TableNextColumn(); ImGui::Checkbox("Frame time graph", &cfg.showFrameGraph);
-            ImGui::SetItemTooltip("Frame times of the FPS target over the last %.0f seconds.\n"
-                                  "Frames taking over twice the average of the normal frames in the second before them are\n"
-                                  "drawn in red.", kFrameGraphSeconds);
-            ImGui::TableNextColumn();
-            ImGui::BeginDisabled(!cfg.showFrameGraph);
-            ImGui::Checkbox("Fast graph updates", &cfg.fastFrameGraph);
-            ImGui::EndDisabled();
-            if (ImGui::IsItemHovered(ImGuiHoveredFlags_ForTooltip | ImGuiHoveredFlags_AllowWhenDisabled))
-                ImGui::SetTooltip("Redraws the graph about 30 times a second instead of every update interval,\n"
-                                  "so it scrolls smoothly. Other values keep the update interval.\n"
-                                  "Uses a little more CPU and GPU while the graph is visible.");
-            ImGui::EndTable();
-        }
-        int unit = cfg.fahrenheit ? 1 : 0;
-        ImGui::TextUnformatted("Temperature unit");
-        ImGui::SameLine();
-        ImGui::RadioButton("\xC2\xB0""C", &unit, 0);
-        ImGui::SameLine();
-        ImGui::RadioButton("\xC2\xB0""F", &unit, 1);
-        cfg.fahrenheit = unit == 1;
-        ImGui::Checkbox("Track game FPS when switching apps", &cfg.trackGame);
-        ImGui::SetItemTooltip("Once a game has been in the foreground, its FPS stays on the overlay while you use\n"
-                              "other apps, until the game exits or another game is focused.\n"
-                              "A game is a full-screen app that renders frames, detected the same way Windows\n"
-                              "decides to turn on \"Do not disturb\" for full-screen apps.");
-        if (!cfg.trackGame) cfg.onlyWithGame = false; // it relies on game tracking
-        ImGui::Indent();
-        ImGui::BeginDisabled(!cfg.trackGame);
-        ImGui::Checkbox("Only show overlay for games", &cfg.onlyWithGame);
-        ImGui::EndDisabled();
-        if (ImGui::IsItemHovered(ImGuiHoveredFlags_ForTooltip | ImGuiHoveredFlags_AllowWhenDisabled))
-            ImGui::SetTooltip("%s", cfg.trackGame
-                ? "The overlay stays hidden until a full-screen app that renders frames is detected,\n"
-                  "and hides again when that game exits. It is always shown while Settings is open."
-                : "Needs \"Track game FPS when switching apps\".");
-        if (!cfg.onlyWithGame) cfg.onlyWhenFocused = false;
-        ImGui::Indent();
-        ImGui::BeginDisabled(!cfg.onlyWithGame);
-        ImGui::Checkbox("Only show while game is focused", &cfg.onlyWhenFocused);
-        ImGui::EndDisabled();
-        if (ImGui::IsItemHovered(ImGuiHoveredFlags_ForTooltip | ImGuiHoveredFlags_AllowWhenDisabled))
-            ImGui::SetTooltip("%s", cfg.onlyWithGame
-                ? "Also hides the overlay while you use other apps, and shows it again as soon as\n"
-                  "the detected game is back in the foreground."
-                : "Needs \"Only show overlay for games\".");
-        ImGui::Unindent();
-        ImGui::Unindent();
-        ImGui::Checkbox("Hide overlay from screenshots / recordings", &cfg.hideFromCapture);
-
-        ImGui::SeparatorText("Position");
-        const char* corners[] = {"Top left", "Top right", "Bottom left", "Bottom right"};
-        int corner = (int)cfg.corner;
-        ImGui::SetNextItemWidth(fieldWidth);
-        if (ImGui::Combo("Corner", &corner, corners, IM_ARRAYSIZE(corners))) cfg.corner = (Corner)corner;
-
-        std::string current = cfg.monitor < (int)monitors.size() ? monitors[cfg.monitor].label
-                                                                 : "Monitor " + std::to_string(cfg.monitor) + " (not connected)";
-        ImGui::SetNextItemWidth(fieldWidth);
-        if (ImGui::BeginCombo("Monitor", current.c_str())) {
-            for (int i = 0; i < (int)monitors.size(); ++i) {
-                if (ImGui::Selectable(monitors[i].label.c_str(), i == cfg.monitor)) cfg.monitor = i;
+    if (ImGui::Begin("MiniHUD 设置", &open, ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoSavedSettings)) {
+        if (ImGui::BeginTabBar("##tabs")) {
+            if (ImGui::BeginTabItem("显示设置")) {
+                ImGui::BeginChild("##display", ImVec2(0,-45));
+                ImGui::SeparatorText("显示指标");
+                bool* toggles[] = {&cfg.showFps,&cfg.showFrameTime,&cfg.showCpuUsage,&cfg.showCpuTemp,&cfg.showGpuUsage,&cfg.showGpuTemp,
+                    &cfg.showCpuPower,&cfg.showGpuPower,&cfg.showVram,&cfg.showRam,&cfg.showDiskTemp};
+                if (ImGui::BeginTable("##metrics", 2)) {
+                    for (size_t i=0;i<std::size(toggles);++i) { ImGui::TableNextColumn(); ImGui::Checkbox(metricLabels[i],toggles[i]); }
+                    ImGui::TableNextColumn(); ImGui::Checkbox("磁盘读写速度", &cfg.showDiskSpeed);
+                    ImGui::TableNextColumn(); ImGui::Checkbox("网络上传 / 下载", &cfg.showNetworkSpeed);
+                    ImGui::TableNextColumn(); ImGui::Checkbox("帧时间曲线", &cfg.showFrameGraph);
+                    ImGui::TableNextColumn(); ImGui::BeginDisabled(!cfg.showFrameGraph);
+                    ImGui::Checkbox("曲线流畅刷新（增加开销）", &cfg.fastFrameGraph); ImGui::EndDisabled();
+                    ImGui::EndTable();
+                }
+                ImGui::SeparatorText("布局与位置");
+                int language=cfg.englishMetrics ? 1 : 0;
+                const char* languages[]={"中文指标", "English 指标"};
+                if (ImGui::Combo("指标语言", &language, languages, 2)) cfg.englishMetrics=language==1;
+                ImGui::Checkbox("单行显示", &cfg.singleLine);
+                if (!cfg.singleLine) ImGui::SliderInt("每行指标数量", &cfg.itemsPerRow, 1, 8);
+                ImGui::SliderFloat("指标水平间距", &cfg.moduleGap, 0, 80, "%.0f px");
+                if (!cfg.singleLine) ImGui::SliderFloat("指标行间距", &cfg.rowGap, 0, 40, "%.0f px");
+                const char* corners[] = {"左上角","右上角","左下角","右下角"};
+                int corner = static_cast<int>(cfg.corner);
+                if (ImGui::Combo("屏幕位置", &corner, corners, 4)) cfg.corner = static_cast<Corner>(corner);
+                const std::string current = cfg.monitor < static_cast<int>(monitors.size()) ? monitors[cfg.monitor].label : "显示器未连接";
+                if (ImGui::BeginCombo("显示器",current.c_str())) {
+                    for (int i=0;i<static_cast<int>(monitors.size());++i)
+                        if (ImGui::Selectable(monitors[i].label.c_str(),i==cfg.monitor)) cfg.monitor=i;
+                    ImGui::EndCombo();
+                }
+                ImGui::DragInt("水平边距",&cfg.offsetX,1,0,kMaxOffset,"%d px");
+                ImGui::DragInt("垂直边距",&cfg.offsetY,1,0,kMaxOffset,"%d px");
+                if (ImGui::Button("紧贴屏幕边缘")) { cfg.offsetX=0; cfg.offsetY=0; }
+                ImGui::SliderFloat("字体大小",&cfg.fontScale,kMinFontScale,kMaxFontScale,"%.2fx");
+                ImGui::SliderFloat("背景不透明度",&cfg.backgroundAlpha,0,1,"%.2f");
+                ImGui::Checkbox("使用华氏温度（告警阈值仍为摄氏度）",&cfg.fahrenheit);
+                ImGui::SeparatorText("行为");
+                bool startup=state.startup.enabled;
+                if (ImGui::Checkbox("登录 Windows 后自动启动", &startup))
+                    action=startup ? UiAction::EnableStartup : UiAction::DisableStartup;
+                ImGui::SetItemTooltip("默认启用；登录后显示黑条和托盘。显隐快捷键仍同步控制两者，开关立即生效。");
+                if (!state.startup.error.empty()) ImGui::TextWrapped("%s",state.startup.error.c_str());
+                if (!state.startupMessage.empty()) ImGui::TextWrapped("%s",state.startupMessage.c_str());
+                if (state.startup.enabled && !state.startup.currentPath) {
+                    ImGui::TextWrapped("启动项路径或启动方式与当前版本不一致，请更新启动项。");
+                    if (ImGui::Button("更新当前启动项")) action=UiAction::EnableStartup;
+                }
+                ImGui::SliderInt("刷新间隔",&cfg.updateIntervalMs,kMinUpdateIntervalMs,kMaxUpdateIntervalMs,"%d ms",ImGuiSliderFlags_Logarithmic);
+                UINT mods=0,vk=0;
+                ImGui::InputText("显示 / 隐藏快捷键",state.hotkeyBuf,sizeof(state.hotkeyBuf));
+                ImGui::SetItemTooltip("快捷键同时控制黑条和托盘图标显隐。隐藏时再次运行程序，也能打开设置。");
+                if (ParseHotkey(state.hotkeyBuf,mods,vk)) cfg.hotkey=state.hotkeyBuf;
+                else ImGui::TextColored(kHotColor,"快捷键格式无效，例如 Ctrl+Shift+F12");
+                ImGui::Checkbox("切换应用后继续跟踪游戏帧率",&cfg.trackGame);
+                ImGui::BeginDisabled(!cfg.trackGame); ImGui::Checkbox("仅在检测到游戏时显示",&cfg.onlyWithGame); ImGui::EndDisabled();
+                ImGui::BeginDisabled(!cfg.onlyWithGame); ImGui::Checkbox("仅在游戏获得焦点时显示",&cfg.onlyWhenFocused); ImGui::EndDisabled();
+                ImGui::Checkbox("不显示在截图和录屏中",&cfg.hideFromCapture);
+                ImGui::TextWrapped("单行超出屏幕宽度时会自动换行。磁盘速度为所有物理磁盘的总吞吐。无数据时显示 --。");
+                ImGui::EndChild(); ImGui::EndTabItem();
             }
-            ImGui::EndCombo();
+            if (ImGui::BeginTabItem("告警阈值")) {
+                ImGui::BeginChild("##alerts",ImVec2(0,-45));
+                ImGui::Checkbox("启用红色告警",&cfg.alertsEnabled);
+                ImGui::TextWrapped("帧率低于阈值时标红；其他指标达到阈值时标红。填 0 关闭单项告警。温度阈值为摄氏度，内存和显存按占用百分比判断。阈值是提醒设置，不是硬件安全上限。");
+                ImGui::BeginDisabled(!cfg.alertsEnabled);
+                for (size_t i=0;i<kMetricCount;++i) {
+                    ImGui::PushID(static_cast<int>(i));
+                    ImGui::SetNextItemWidth(120);
+                    ImGui::InputFloat(metricLabels[i],&cfg.alertLimits[i],1,5,"%.1f");
+                    ImGui::SameLine(); ImGui::TextDisabled("%s",metricUnits[i]);
+                    ImGui::PopID();
+                }
+                ImGui::EndDisabled();
+                if (ImGui::Button("恢复默认阈值")) cfg.alertLimits=kDefaultLimits;
+                ImGui::EndChild(); ImGui::EndTabItem();
+            }
+            if (ImGui::BeginTabItem("电脑配置")) {
+                ImGui::BeginChild("##computer",ImVec2(0,-45));
+                MEMORYSTATUSEX memory{sizeof(memory)}; GlobalMemoryStatusEx(&memory);
+                ImGui::TextWrapped("处理器：%s",snap.cpuName.c_str());
+                ImGui::TextWrapped("显卡：%s",snap.gpuName.c_str());
+                ImGui::Text("物理内存：%.1f GB",memory.ullTotalPhys/(1024.0*1024*1024));
+                if (snap.vramTotalGB) ImGui::Text("显存容量：%.1f GB",*snap.vramTotalGB);
+                if (!state.diskInfoLoaded) { state.diskInfo=ReadDiskTemperature(); state.diskInfoLoaded=true; }
+                ImGui::TextWrapped("固态硬盘：%s",state.diskInfo.name.empty()?"未知":state.diskInfo.name.c_str());
+                OSVERSIONINFOW version{sizeof(version)};
+                if (HMODULE ntdll=GetModuleHandleW(L"ntdll.dll")) {
+                    using VersionFn=LONG(WINAPI*)(OSVERSIONINFOW*);
+                    if (auto fn=reinterpret_cast<VersionFn>(GetProcAddress(ntdll,"RtlGetVersion"))) fn(&version);
+                }
+                if (version.dwBuildNumber) ImGui::Text("Windows 内部版本：%lu",version.dwBuildNumber);
+                ImGui::SeparatorText("采集状态");
+                ImGui::TextWrapped("帧率目标：%s（PID %lu）",snap.foregroundProcess.c_str(),snap.foregroundPid);
+                ImGui::TextWrapped("帧率：%s",StatusText(snap.fpsStatus).c_str());
+                ImGui::TextWrapped("CPU：%s",StatusText(snap.cpuStatus).c_str());
+                if (state.pawnioInstalling) ImGui::TextUnformatted("正在安装 PawnIO...");
+                else if (snap.cpuNeedsDriver && PawnIOSetupBundled() && ImGui::Button("安装 PawnIO 驱动")) action=UiAction::InstallPawnIO;
+                if (!state.pawnioMessage.empty()) ImGui::TextWrapped("%s",state.pawnioMessage.c_str());
+                ImGui::TextWrapped("GPU：%s",StatusText(snap.gpuStatus).c_str());
+                ImGui::TextWrapped("SSD：%s",StatusText(state.diskInfo.status).c_str());
+                ImGui::EndChild(); ImGui::EndTabItem();
+            }
+            ImGui::EndTabBar();
         }
-        ImGui::SetNextItemWidth(fieldWidth);
-        ImGui::DragInt("Offset X", &cfg.offsetX, 1.0f, 0, kMaxOffset, "%d px");
-        ImGui::SetNextItemWidth(fieldWidth);
-        ImGui::DragInt("Offset Y", &cfg.offsetY, 1.0f, 0, kMaxOffset, "%d px");
-
-        ImGui::SeparatorText("Appearance");
-        ImGui::SetNextItemWidth(fieldWidth);
-        ImGui::SliderFloat("Size", &cfg.fontScale, kMinFontScale, kMaxFontScale, "%.2fx");
-        ImGui::SetNextItemWidth(fieldWidth);
-        ImGui::SliderFloat("Background opacity", &cfg.backgroundAlpha, 0.0f, 1.0f, "%.2f");
-
-        ImGui::SeparatorText("Behavior");
-        ImGui::SetNextItemWidth(fieldWidth);
-        // Logarithmic, so the short intervals keep fine steps across the wide range.
-        ImGui::SliderInt("Update interval", &cfg.updateIntervalMs, kMinUpdateIntervalMs, kMaxUpdateIntervalMs, "%d ms",
-                         ImGuiSliderFlags_Logarithmic);
-
-        UINT mods = 0, vk = 0;
-        const bool hotkeyValid = ParseHotkey(state.hotkeyBuf, mods, vk);
-        if (!hotkeyValid) ImGui::PushStyleColor(ImGuiCol_Text, kHotColor);
-        ImGui::SetNextItemWidth(fieldWidth);
-        ImGui::InputText("Settings hotkey", state.hotkeyBuf, sizeof(state.hotkeyBuf));
-        if (!hotkeyValid) ImGui::PopStyleColor();
-        if (hotkeyValid) cfg.hotkey = state.hotkeyBuf;
-        ImGui::SetItemTooltip("e.g. Ctrl+Shift+F12, Alt+F10, Ctrl+Alt+O");
-
-        ImGui::SeparatorText("Sensor status");
-        ImGui::TextDisabled("FPS target:  %s (PID %lu)%s",
-                            snap.foregroundProcess.empty() ? "?" : snap.foregroundProcess.c_str(), snap.foregroundPid,
-                            snap.targetIsTrackedGame ? "  - tracked game" : "");
-        ImGui::TextDisabled("FPS:  %s", snap.fpsStatus.c_str());
-        ImGui::TextDisabled("CPU:  %s  [%s]", snap.cpuName.empty() ? "?" : snap.cpuName.c_str(), snap.cpuStatus.c_str());
-        if (state.pawnioInstalling) {
-            ImGui::SameLine();
-            ImGui::TextColored(kWarmColor, "Installing PawnIO...");
-        } else if (snap.cpuNeedsDriver && PawnIOSetupBundled()) {
-            ImGui::SameLine();
-            if (ImGui::SmallButton("Install PawnIO driver")) action = UiAction::InstallPawnIO;
-            ImGui::SetItemTooltip("Installs the signed PawnIO driver (pawnio.eu), needed to read the CPU temperature and power.");
-        }
-        if (!state.pawnioMessage.empty()) ImGui::TextColored(kWarmColor, "%s", state.pawnioMessage.c_str());
-        ImGui::TextDisabled("GPU:  %s  [%s]", snap.gpuName.empty() ? "?" : snap.gpuName.c_str(), snap.gpuStatus.c_str());
-
         ImGui::Separator();
-        if (ImGui::Button("Save & close")) action = UiAction::CloseSettings;
+        if (ImGui::Button("保存并关闭")) action=UiAction::CloseSettings;
         ImGui::SameLine();
-        if (ImGui::Button("Reset to defaults")) {
-            const bool offerPawnIOInstall = cfg.offerPawnIOInstall; // not a setting shown here
-            cfg = Config{};
-            cfg.offerPawnIOInstall = offerPawnIOInstall;
-            std::snprintf(state.hotkeyBuf, sizeof(state.hotkeyBuf), "%s", cfg.hotkey.c_str());
-        }
-        ImGui::SameLine();
-        if (ImGui::Button("Exit FPS Monitor")) action = UiAction::ExitApp;
+        if (ImGui::Button("恢复全部默认设置")) { const bool startupApplied=cfg.startupDefaultApplied; cfg=Config{}; cfg.startupDefaultApplied=startupApplied; std::snprintf(state.hotkeyBuf,sizeof(state.hotkeyBuf),"%s",cfg.hotkey.c_str()); }
+        ImGui::SameLine(); if (ImGui::Button("退出 MiniHUD")) action=UiAction::ExitApp;
     }
     ImGui::End();
-
-    if (!open || (!editing && ImGui::IsKeyPressed(ImGuiKey_Escape))) action = UiAction::CloseSettings;
-    cfg.Clamp();
-    return action;
+    if (!open || (!editing && ImGui::IsKeyPressed(ImGuiKey_Escape))) action=UiAction::CloseSettings;
+    cfg.Clamp(); return action;
 }
