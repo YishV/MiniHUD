@@ -1,4 +1,4 @@
-# MiniHUD
+﻿# MiniHUD
 
 Windows 游戏性能小黑卡。默认在屏幕左上角用单行显示帧率、1% / 0.1% 低帧、CPU 温度、GPU 温度和显存已用/总量。卡片无边框、点击穿透，优先支持无边框窗口游戏；不向游戏进程注入代码。
 
@@ -14,7 +14,7 @@ Windows 游戏性能小黑卡。默认在屏幕左上角用单行显示帧率、
 
 从开始菜单启动 MiniHUD（免安装版直接双击 `MiniHUD.exe`）。首次运行若弹出 Windows 管理员提示，需要同意才能采集 ETW 帧率。`Ctrl+Shift+F12` 显示或隐藏小黑条；黑条显示时点击托盘图标打开设置，右键可隐藏或退出。隐藏黑条时托盘图标也隐藏，再按相同快捷键即可恢复两者；也可再次运行程序打开设置。
 
-中文设置窗口的 **显示设置** 页可开关指标，切换单行/多行（每行 1–8 项），切换中文 / English 指标，调整指标水平间距、行间距、位置、大小、透明度和刷新间隔；**告警阈值** 页可修改各项标红阈值；**性能记录** 页用于录制一段游戏过程并生成报告；**电脑配置** 页显示制造商与型号、主板、BIOS、CPU、GPU、内存和磁盘型号、各传感器采集状态，并可导出诊断信息。设置保存在 `%APPDATA%\MiniHUD\config.ini`，卸载程序不会删除它。从旧版本升级时，程序旁旧的 `config.ini` 会在首次启动时自动迁移过去并删除，下载目录不会再留下配置文件。
+中文设置窗口的 **显示设置** 页可开关指标，切换单行/多行（每行 1–8 项），切换中文 / English 指标，调整指标水平间距、行间距、位置、大小、透明度和刷新间隔；**告警阈值** 页可修改各项标红阈值；**性能记录** 页用于录制一段游戏过程并生成报告；**电脑配置** 页显示整机厂商与型号、主板、BIOS、CPU 核心/线程与频率、每条内存的厂商型号频率、显卡与显存、硬盘型号容量与接口、显示器分辨率刷新率，以及各传感器采集状态，并可导出诊断信息。设置保存在 `%APPDATA%\MiniHUD\config.ini`，卸载程序不会删除它。从旧版本升级时，程序旁旧的 `config.ini` 会在首次启动时自动迁移过去并删除，下载目录不会再留下配置文件。
 
 | 指标 | 数据来源 | 默认 |
 |---|---|---|
@@ -55,10 +55,10 @@ cmake --build build\vs2022-final --config Release --parallel 4
 
 # 安装包：需要 Inno Setup 6（winget install JRSoftware.InnoSetup）
 & "$env:LOCALAPPDATA\Programs\Inno Setup 6\ISCC.exe" installer\minihud.iss `
-  /DBuildDir=..\build\vs2022-final\Release /DAppVersion=1.1.0
+  /DBuildDir=..\build\vs2022-final\Release /DAppVersion=1.1.1
 ```
 
-生成的安装包在 `release\v1.1.0\MiniHUD-Setup.exe`，安装到 `%LocalAppData%\Programs\MiniHUD`。
+生成的安装包在 `release\v1.1.1\MiniHUD-Setup.exe`，安装到 `%LocalAppData%\Programs\MiniHUD`。
 
 ## 来源与许可
 

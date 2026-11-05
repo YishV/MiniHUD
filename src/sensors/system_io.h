@@ -8,7 +8,9 @@
 
 struct DiskReading {
     std::optional<float> temperature;
+    std::optional<float> capacityGB;
     std::string name;
+    std::string bus;    // NVMe / SATA / USB ...
     std::string status;
 };
 

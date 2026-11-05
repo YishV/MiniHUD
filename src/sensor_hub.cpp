@@ -1,6 +1,7 @@
 #include "sensor_hub.h"
 
 #include "diag.h"
+#include "hardware_info.h"
 
 #include "sensors/cpu_pawnio.h"
 #include "sensors/cpu_usage.h"
@@ -125,6 +126,35 @@ void SensorHub::Run() {
     const std::string biosVendor = FirmwareString(L"BIOSVendor");
     const std::string biosVersion = FirmwareString(L"BIOSVersion");
     const std::string biosDate = FirmwareString(L"BIOSReleaseDate");
+    const CpuInfo cpuInfo = ReadCpuInfo();
+    std::vector<std::string> ramLines;
+    for (const RamModule& module : ReadRamModules()) {
+        char size[32];
+        if (module.capacityMB >= 1024 && module.capacityMB % 1024 == 0)
+            std::snprintf(size, sizeof(size), "%u GB", module.capacityMB / 1024);
+        else
+            std::snprintf(size, sizeof(size), "%u MB", module.capacityMB);
+        std::string line = size;
+        if (!module.type.empty()) {
+            line += ' ';
+            line += module.type;
+            if (module.speedMt) line += "-" + std::to_string(module.speedMt);
+        }
+        if (!module.vendor.empty()) {
+            line += "  ";
+            line += module.vendor;
+        }
+        if (!module.partNumber.empty()) {
+            line += ' ';
+            line += module.partNumber;
+        }
+        if (!module.slot.empty()) {
+            line += "  (";
+            line += module.slot;
+            line += ')';
+        }
+        ramLines.push_back(std::move(line));
+    }
     std::string gpuStatus;
     const std::unique_ptr<GpuSource> gpu = OpenGpu(gpuStatus);
     DiskSpeed diskSpeed;
@@ -310,6 +340,12 @@ void SensorHub::Run() {
         s.biosVendor = biosVendor;
         s.biosVersion = biosVersion;
         s.biosDate = biosDate;
+        s.cpuVendor = cpuInfo.vendor;
+        s.cpuCores = cpuInfo.cores;
+        s.cpuThreads = cpuInfo.threads;
+        s.cpuBaseMhz = cpuInfo.baseMhz;
+        s.cpuMaxMhz = cpuInfo.maxMhz;
+        s.ramModules = ramLines;
         s.cpuStatus = cpu->Status();
         s.cpuNeedsDriver = cpu->NeedsDriver();
 
@@ -326,6 +362,7 @@ void SensorHub::Run() {
         if (gpuPowerDue) slow.gpuPowerW = gpu->Power();
         if (vramDue) setVram(gpu->Memory());
         s.gpuName = gpu->Name();
+        s.gpuVendor = gpu->Vendor();
         s.gpuStatus = gpuStatus;
 
         // RAM
@@ -345,6 +382,8 @@ void SensorHub::Run() {
             slow.diskTemp = disk.temperature;
             slow.diskName = disk.name;
             slow.diskStatus = disk.status;
+            slow.diskCapacityGB = disk.capacityGB;
+            slow.diskBus = disk.bus;
         }
         if (mask & kMetricDiskSpeed) {
             float read = 0, write = 0;
@@ -370,6 +409,8 @@ void SensorHub::Run() {
         s.diskTemp = slow.diskTemp;
         s.diskName = slow.diskName;
         s.diskStatus = slow.diskStatus;
+        s.diskCapacityGB = slow.diskCapacityGB;
+        s.diskBus = slow.diskBus;
 
         if (recorder_.Active()) {
             if (!s.frameTimesMs.empty()) recorder_.AddFrameTimes(s.frameTimesMs, s.lastFrameQpc);

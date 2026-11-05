@@ -368,23 +368,48 @@ UiAction DrawSettings(Config& cfg, const SensorSnapshot& snap, const std::vector
                 ImGui::BeginChild("##computer",ImVec2(0,-45));
                 MEMORYSTATUSEX memory{sizeof(memory)}; GlobalMemoryStatusEx(&memory);
                 ImGui::TextWrapped("处理器：%s",snap.cpuName.c_str());
+                if (snap.cpuCores) {
+                    if (snap.cpuMaxMhz > snap.cpuBaseMhz * 1.05f)
+                        ImGui::TextWrapped("CPU：%s · %d 核 %d 线程 · %.1f / %.1f GHz",snap.cpuVendor.c_str(),snap.cpuCores,
+                                           snap.cpuThreads,snap.cpuBaseMhz/1000.0f,snap.cpuMaxMhz/1000.0f);
+                    else
+                        ImGui::TextWrapped("CPU：%s · %d 核 %d 线程 · %.1f GHz",snap.cpuVendor.c_str(),snap.cpuCores,
+                                           snap.cpuThreads,snap.cpuBaseMhz/1000.0f);
+                }
                 if (!snap.systemVendor.empty() || !snap.systemModel.empty())
                     ImGui::TextWrapped("制造商 / 型号：%s %s",snap.systemVendor.c_str(),snap.systemModel.c_str());
                 if (!snap.baseboardVendor.empty() || !snap.baseboardProduct.empty())
                     ImGui::TextWrapped("主板：%s %s",snap.baseboardVendor.c_str(),snap.baseboardProduct.c_str());
                 if (!snap.biosVendor.empty() || !snap.biosVersion.empty())
                     ImGui::TextWrapped("BIOS：%s %s（%s）",snap.biosVendor.c_str(),snap.biosVersion.c_str(),snap.biosDate.c_str());
-                ImGui::TextWrapped("显卡：%s",snap.gpuName.c_str());
+                if (snap.gpuVendor.empty())
+                    ImGui::TextWrapped("显卡：%s",snap.gpuName.c_str());
+                else
+                    ImGui::TextWrapped("显卡：%s（%s）",snap.gpuName.c_str(),snap.gpuVendor.c_str());
                 ImGui::Text("物理内存：%.1f GB",memory.ullTotalPhys/(1024.0*1024*1024));
+                for (const std::string& module : snap.ramModules) ImGui::TextWrapped("内存条：%s",module.c_str());
                 if (snap.vramTotalGB) ImGui::Text("显存容量：%.1f GB",*snap.vramTotalGB);
                 if (!state.diskInfoLoaded) { state.diskInfo=ReadDiskTemperature(); state.diskInfoLoaded=true; }
-                ImGui::TextWrapped("固态硬盘：%s",state.diskInfo.name.empty()?"未知":state.diskInfo.name.c_str());
+                if (state.diskInfoLoaded) {
+                    if (state.diskInfo.capacityGB && !state.diskInfo.bus.empty())
+                        ImGui::TextWrapped("固态硬盘：%s · %.0f GB · %s",state.diskInfo.name.empty()?"未知":state.diskInfo.name.c_str(),
+                                           *state.diskInfo.capacityGB,state.diskInfo.bus.c_str());
+                    else
+                        ImGui::TextWrapped("固态硬盘：%s",state.diskInfo.name.empty()?"未知":state.diskInfo.name.c_str());
+                }
                 OSVERSIONINFOW version{sizeof(version)};
                 if (HMODULE ntdll=GetModuleHandleW(L"ntdll.dll")) {
                     using VersionFn=LONG(WINAPI*)(OSVERSIONINFOW*);
                     if (auto fn=reinterpret_cast<VersionFn>(GetProcAddress(ntdll,"RtlGetVersion"))) fn(&version);
                 }
                 if (version.dwBuildNumber) ImGui::Text("Windows 内部版本：%lu",version.dwBuildNumber);
+                for (const MonitorInfo& monitor : monitors) {
+                    const char* monitorName = monitor.name.empty() ? monitor.deviceName.c_str() : monitor.name.c_str();
+                    if (monitor.refreshHz)
+                        ImGui::TextWrapped("显示器：%s %dx%d @ %d Hz",monitorName,monitor.width,monitor.height,monitor.refreshHz);
+                    else
+                        ImGui::TextWrapped("显示器：%s %dx%d",monitorName,monitor.width,monitor.height);
+                }
                 ImGui::SeparatorText("采集状态");
                 ImGui::TextWrapped("帧率目标：%s（PID %lu）",snap.foregroundProcess.c_str(),snap.foregroundPid);
                 ImGui::TextWrapped("帧率：%s",StatusText(snap.fpsStatus).c_str());

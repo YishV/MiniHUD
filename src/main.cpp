@@ -242,8 +242,10 @@ void ExportDiagnostics(App& app) {
     body << "制造商/型号: " << s.systemVendor << " " << s.systemModel << "\r\n";
     body << "主板: " << s.baseboardVendor << " " << s.baseboardProduct << "\r\n";
     body << "BIOS: " << s.biosVendor << " " << s.biosVersion << " " << s.biosDate << "\r\n";
-    body << "CPU: " << s.cpuName << "\r\n";
-    body << "GPU: " << s.gpuName << "\r\n";
+    body << "CPU: " << s.cpuName << "（" << s.cpuVendor << "，" << s.cpuCores << " 核 " << s.cpuThreads << " 线程）\r\n";
+    for (const std::string& module : s.ramModules) body << "内存: " << module << "\r\n";
+    body << "GPU: " << s.gpuName << "（" << s.gpuVendor << "）\r\n";
+    if (s.diskCapacityGB) body << "硬盘: " << s.diskName << " " << *s.diskCapacityGB << " GB " << s.diskBus << "\r\n";
     body << "配置文件: " << Narrow(app.configPath) << "\r\n";
     body << "\r\n传感器状态:\r\n";
     body << "  FPS: " << s.fpsStatus << "\r\n";

@@ -19,6 +19,14 @@ public:
     const std::string& Name() const { return name_; }
     const std::string& Status() const { return status_; }
 
+    // Vendor derived from the adapter name; empty when none is recognisable.
+    virtual std::string Vendor() const {
+        if (name_.find("NVIDIA") != std::string::npos) return "NVIDIA";
+        if (name_.find("AMD") != std::string::npos || name_.find("Radeon") != std::string::npos) return "AMD";
+        if (name_.find("Intel") != std::string::npos) return "Intel";
+        return {};
+    }
+
     // Collects fresh data for this poll; call once before the getters below.
     virtual void Update() {}
     virtual std::optional<float> Usage() = 0;       // percent

@@ -20,6 +20,25 @@ std::string DiskProduct(const std::byte* bytes, size_t size, const STORAGE_DEVIC
     const size_t len = strnlen_s(start, maxLen);
     return std::string(start, len);
 }
+
+std::string BusTypeName(STORAGE_BUS_TYPE bus) {
+    switch (bus) {
+    case BusTypeScsi: return "SCSI";
+    case BusTypeAtapi: return "ATAPI";
+    case BusTypeAta: return "ATA";
+    case BusType1394: return "1394";
+    case BusTypeUsb: return "USB";
+    case BusTypeRAID: return "RAID";
+    case BusTypeSas: return "SAS";
+    case BusTypeSata: return "SATA";
+    case BusTypeSd: return "SD";
+    case BusTypeMmc: return "MMC";
+    case BusTypeVirtual: return "虚拟";
+    case BusTypeNvme: return "NVMe";
+    case BusTypeUfs: return "UFS";
+    default: return {};
+    }
+}
 }
 
 DiskReading ReadDiskTemperature() {
@@ -37,11 +56,13 @@ DiskReading ReadDiskTemperature() {
         DWORD bytes = 0;
         query.PropertyId = StorageDeviceProperty;
         std::string product;
+        STORAGE_BUS_TYPE busType = BusTypeUnknown;
         if (DeviceIoControl(disk, IOCTL_STORAGE_QUERY_PROPERTY, &query, sizeof(query),
                             buffer.data(), static_cast<DWORD>(buffer.size()), &bytes, nullptr) &&
             bytes >= sizeof(STORAGE_DEVICE_DESCRIPTOR)) {
             const auto& descriptor = *reinterpret_cast<const STORAGE_DEVICE_DESCRIPTOR*>(buffer.data());
             product = DiskProduct(buffer.data(), bytes, descriptor);
+            busType = descriptor.BusType;
         }
 
         query.PropertyId = StorageDeviceSeekPenaltyProperty;
@@ -54,7 +75,25 @@ DiskReading ReadDiskTemperature() {
             CloseHandle(disk);
             continue;
         }
-        if (out.name.empty()) out.name = product;
+        if (out.name.empty()) {
+            out.name = product;
+            out.bus = BusTypeName(busType);
+            GET_LENGTH_INFORMATION length{};
+            DWORD returned = 0;
+            if (DeviceIoControl(disk, IOCTL_DISK_GET_LENGTH_INFO, nullptr, 0, &length, sizeof(length), &returned,
+                                nullptr))
+                out.capacityGB =
+                    static_cast<float>(double(length.Length.QuadPart) / (1024.0 * 1024.0 * 1024.0));
+            if (!out.capacityGB) { // the physical-drive size needs read access; fall back to the system volume
+                ULARGE_INTEGER total{};
+                wchar_t windows[MAX_PATH] = {};
+                if (GetWindowsDirectoryW(windows, MAX_PATH) >= 3) {
+                    const wchar_t root[4] = {windows[0], ':', '\\', 0};
+                    if (GetDiskFreeSpaceExW(root, nullptr, &total, nullptr))
+                        out.capacityGB = static_cast<float>(double(total.QuadPart) / (1024.0 * 1024.0 * 1024.0));
+                }
+            }
+        }
 
         query.PropertyId = StorageDeviceTemperatureProperty;
         buffer.fill(std::byte{});

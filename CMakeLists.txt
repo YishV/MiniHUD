@@ -125,6 +125,7 @@ add_executable(fps_monitor WIN32
     src/config.cpp
     src/recorder.cpp
     src/diag.cpp
+    src/hardware_info.cpp
     src/startup_task.cpp
     src/overlay_window.cpp
     src/overlay_ui.cpp
@@ -145,7 +146,7 @@ target_include_directories(fps_monitor SYSTEM PRIVATE "${ADL_SDK_INCLUDE_DIR}")
 target_compile_definitions(fps_monitor PRIVATE UNICODE _UNICODE WIN32_LEAN_AND_MEAN NOMINMAX WINVER=0x0A00 _WIN32_WINNT=0x0A00 NTDDI_VERSION=0x0A000000)
 target_compile_options(fps_monitor PRIVATE /W4 /permissive- /utf-8)
 target_link_libraries(fps_monitor PRIVATE
-    imgui d3d11 dxgi dcomp pdh iphlpapi advapi32 gdi32 shell32 user32 taskschd ole32 oleaut32 winhttp bcrypt)
+    imgui d3d11 dxgi dcomp pdh iphlpapi advapi32 gdi32 shell32 user32 taskschd ole32 oleaut32 winhttp bcrypt powrprof)
 set_target_properties(fps_monitor PROPERTIES OUTPUT_NAME MiniHUD)
 
 # ETW kernel providers and the PawnIO driver both require elevation.
@@ -203,3 +204,8 @@ target_include_directories(minihud_diag_check PRIVATE src)
 target_compile_definitions(minihud_diag_check PRIVATE WIN32_LEAN_AND_MEAN NOMINMAX UNICODE _UNICODE)
 target_compile_options(minihud_diag_check PRIVATE /utf-8)
 target_link_libraries(minihud_diag_check PRIVATE shell32 ole32)
+add_executable(minihud_hardware_probe EXCLUDE_FROM_ALL tools/hardware_probe.cpp src/hardware_info.cpp src/sensors/system_io.cpp)
+target_include_directories(minihud_hardware_probe PRIVATE src)
+target_compile_definitions(minihud_hardware_probe PRIVATE WIN32_LEAN_AND_MEAN NOMINMAX UNICODE _UNICODE)
+target_compile_options(minihud_hardware_probe PRIVATE /utf-8)
+target_link_libraries(minihud_hardware_probe PRIVATE powrprof pdh iphlpapi)

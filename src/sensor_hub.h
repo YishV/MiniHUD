@@ -63,6 +63,15 @@ struct SensorSnapshot {
     std::string biosVendor;
     std::string biosVersion;
     std::string biosDate;
+    std::string cpuVendor;
+    int cpuCores = 0;
+    int cpuThreads = 0;
+    float cpuBaseMhz = 0.0f;
+    float cpuMaxMhz = 0.0f;
+    std::vector<std::string> ramModules; // one readable line per installed module
+    std::string gpuVendor;
+    std::optional<float> diskCapacityGB;
+    std::string diskBus;
 
     // Performance recording state, shown in the settings panel.
     bool recording = false;

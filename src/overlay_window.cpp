@@ -52,6 +52,20 @@ std::vector<MonitorInfo> EnumerateMonitors() {
         WideCharToMultiByte(CP_UTF8, 0, mi.szDevice, -1, dev, sizeof(dev), nullptr, nullptr);
         const char* name = dev;
         if (!strncmp(name, "\\\\.\\", 4)) name += 4;
+        info.deviceName = dev;
+        info.width = mi.rcMonitor.right - mi.rcMonitor.left;
+        info.height = mi.rcMonitor.bottom - mi.rcMonitor.top;
+        DEVMODEW mode = {};
+        mode.dmSize = sizeof(mode);
+        if (EnumDisplaySettingsW(mi.szDevice, ENUM_CURRENT_SETTINGS, &mode))
+            info.refreshHz = static_cast<int>(mode.dmDisplayFrequency);
+        DISPLAY_DEVICEW device = {};
+        device.cb = sizeof(device);
+        if (EnumDisplayDevicesW(mi.szDevice, 0, &device, 0)) {
+            char model[128];
+            WideCharToMultiByte(CP_UTF8, 0, device.DeviceString, -1, model, sizeof(model), nullptr, nullptr);
+            info.name = model;
+        }
         char label[160];
         std::snprintf(label, sizeof(label), "%s  %ldx%ld%s", name, mi.rcMonitor.right - mi.rcMonitor.left,
                       mi.rcMonitor.bottom - mi.rcMonitor.top, (mi.dwFlags & MONITORINFOF_PRIMARY) ? "  （主屏幕）" : "");

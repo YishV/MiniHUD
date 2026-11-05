@@ -16,6 +16,11 @@
 struct MonitorInfo {
     RECT rect = {};
     std::string label;
+    std::string deviceName; // e.g. "\\.\DISPLAY1"
+    std::string name;       // monitor model, when Windows reports one
+    int width = 0;
+    int height = 0;
+    int refreshHz = 0;
 };
 
 // Primary monitor first, then the rest in enumeration order (matches Config::monitor).
