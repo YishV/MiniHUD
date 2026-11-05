@@ -56,7 +56,7 @@ struct Config {
     bool onlyWhenFocused = false; // ...and while the tracked game is not in the foreground (needs onlyWithGame)
 
     // [Sensors]
-    bool offerPawnIOInstall = false; // driver installation is always an explicit choice
+    bool offerPawnIOInstall = true; // offer once when needed; installation still requires confirmation
 
     void Clamp();
 };

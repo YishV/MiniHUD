@@ -356,7 +356,7 @@ std::optional<LRESULT> OverlayMessage(App& app, HWND, UINT msg, WPARAM wp, LPARA
     case WM_APP_PAWNIO_DONE: {
         std::unique_ptr<std::string> error(reinterpret_cast<std::string*>(lp));
         app.settings.pawnioInstalling = false;
-        app.settings.pawnioMessage = wp ? "PawnIO installed." : "PawnIO install failed: " + *error;
+        app.settings.pawnioMessage = wp ? "PawnIO 安装完成，正在重新连接温度传感器。" : "PawnIO 安装失败：" + *error;
         app.sensors.ReinitPawnIO();
         app.dirty = true;
         return 0;

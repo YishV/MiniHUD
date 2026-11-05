@@ -26,7 +26,7 @@ Windows 游戏性能小黑卡。默认在屏幕左上角用单行显示帧率、
 | 磁盘读写速度 | Windows PDH 所有物理磁盘总吞吐 | 关 |
 | 网速上传/下载 | Windows 活跃网卡累计字节差分 | 关 |
 
-CPU 温度需要单独安装 [PawnIO](https://github.com/namazso/PawnIO)。此构建不捆绑安装器，也不会自动安装驱动；未安装时显示 `N/A`，设置中能看到原因。温度与速率采集取决于设备和驱动支持。独占全屏游戏不保证显示。
+当前 CPU 温度采集通过 [PawnIO](https://github.com/namazso/PawnIO) 驱动实现。v0.1.1 起 EXE 内置官方 PawnIO 2.2.0 安装器，无需另行下载：缺少驱动时会询问是否安装；也可在“电脑配置”页点击“安装 PawnIO 驱动”。安装需要管理员权限，完成后自动重新连接传感器；已安装兼容驱动时不重复安装。选择跳过仍可使用其余指标。温度与速率采集取决于设备和驱动支持。独占全屏游戏不保证显示。
 
 ## 登录自启动与图标
 
@@ -42,10 +42,10 @@ CPU 温度需要单独安装 [PawnIO](https://github.com/namazso/PawnIO)。此�
 
 ## 编译
 
-需要 Visual Studio 2022 C++ 工具链和 CMake 3.24 以上。首次配置会下载固定版本的 Dear ImGui、PawnIO 模块与 AMD ADL SDK 头文件。默认关闭 PawnIO 安装器打包：
+需要 Visual Studio 2022 C++ 工具链和 CMake 3.24 以上。首次配置会下载固定版本的 Dear ImGui、PawnIO 模块与 AMD ADL SDK 头文件。默认将官方签名的 PawnIO 2.2.0 安装器嵌入 EXE，构建时验证 SHA-256；如需精简版可将选项改为 OFF：
 
 ```powershell
-cmake -S . -B build\vs2022-final -G "Visual Studio 17 2022" -A x64 -DFPS_MONITOR_BUNDLE_PAWNIO=OFF
+cmake -S . -B build\vs2022-final -G "Visual Studio 17 2022" -A x64 -DFPS_MONITOR_BUNDLE_PAWNIO=ON
 cmake --build build\vs2022-final --config Release --parallel 4
 New-Item -ItemType Directory release -Force | Out-Null
 Copy-Item build\vs2022-final\Release\MiniHUD.exe release\MiniHUD.exe
@@ -54,3 +54,7 @@ Copy-Item build\vs2022-final\Release\MiniHUD.exe release\MiniHUD.exe
 ## 来源与许可
 
 本项目基于 [andrei-cb/fps_monitor](https://github.com/andrei-cb/fps_monitor) 的 `4b9ae7b` 版本，保留 [原项目说明](UPSTREAM.md) 与 [AGPL-3.0 许可证](LICENSE)。新增 Windows 磁盘和网络采集、电脑配置页及简洁卡片布局。分发修改版时遵守 AGPL-3.0，保留源码和版权信息。
+
+## 第三方驱动
+
+PawnIO 安装器保持官方原样，来源为 [PawnIO.Setup 2.2.0](https://github.com/namazso/PawnIO.Setup/releases/tag/2.2.0)。驱动源代码和许可证见 [PawnIO](https://github.com/namazso/PawnIO)，模块源代码见 [PawnIO.Modules](https://github.com/namazso/PawnIO.Modules)。安装器内嵌不会增加常驻进程；只有用户确认安装时才释放运行。

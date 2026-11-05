@@ -48,23 +48,36 @@ bool RunBundledPawnIOSetup(std::string& error) {
     const void* data;
     DWORD size;
     if (!FindSetupResource(data, size)) {
-        error = "This build does not include the PawnIO installer";
+        error = "此版本未内置 PawnIO 安装器";
         return false;
     }
 
-    const std::wstring path = AppDirectory() + L"PawnIO_setup.exe";
+    wchar_t tempRoot[MAX_PATH], tempDirectory[MAX_PATH];
+    const DWORD tempLength=GetTempPathW(MAX_PATH,tempRoot);
+    if (!tempLength || tempLength>=MAX_PATH || !GetTempFileNameW(tempRoot,L"MHD",0,tempDirectory)) {
+        error="无法创建安装器临时目录";
+        return false;
+    }
+    DeleteFileW(tempDirectory);
+    if (!CreateDirectoryW(tempDirectory,nullptr)) {
+        error="无法创建安装器临时目录";
+        return false;
+    }
+    const std::wstring path = std::wstring(tempDirectory) + L"\\PawnIO_setup.exe";
+    auto cleanup = [&] { DeleteFileW(path.c_str()); RemoveDirectoryW(tempDirectory); };
 
-    HANDLE f = CreateFileW(path.c_str(), GENERIC_WRITE, 0, nullptr, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
+    HANDLE f = CreateFileW(path.c_str(), GENERIC_WRITE, 0, nullptr, CREATE_NEW, FILE_ATTRIBUTE_NORMAL, nullptr);
     if (f == INVALID_HANDLE_VALUE) {
-        error = "Could not write the installer to the app folder";
+        error = "无法写入临时安装文件";
+        cleanup();
         return false;
     }
     DWORD written = 0;
     BOOL ok = WriteFile(f, data, size, &written, nullptr);
     CloseHandle(f);
     if (!ok || written != size) {
-        DeleteFileW(path.c_str());
-        error = "Could not write the installer to the app folder";
+        cleanup();
+        error = "无法写入临时安装文件";
         return false;
     }
 
@@ -76,16 +89,16 @@ bool RunBundledPawnIOSetup(std::string& error) {
     sei.nShow = SW_HIDE;
     bool success = false;
     if (ShellExecuteExW(&sei) && sei.hProcess) {
-        WaitForSingleObject(sei.hProcess, 120000);
+        const DWORD wait=WaitForSingleObject(sei.hProcess, 120000);
         DWORD code = 1;
         GetExitCodeProcess(sei.hProcess, &code);
         CloseHandle(sei.hProcess);
-        success = code == 0 || PawnIOReady();
-        if (!success) error = "PawnIO installer exited with code " + std::to_string(code);
+        success = wait==WAIT_OBJECT_0 && (code==0 || code==ERROR_SUCCESS_REBOOT_REQUIRED);
+        if (!success) error = wait==WAIT_TIMEOUT ? "安装等待超时，请稍后检查驱动状态" : "安装器退出代码：" + std::to_string(code);
     } else {
-        error = GetLastError() == ERROR_CANCELLED ? "Installation was cancelled" : "Could not start the PawnIO installer";
+        error = GetLastError() == ERROR_CANCELLED ? "已取消安装" : "无法启动 PawnIO 安装器";
     }
 
-    DeleteFileW(path.c_str());
+    cleanup();
     return success;
 }

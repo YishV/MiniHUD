@@ -11,6 +11,7 @@ int main() {
     const std::wstring path = AppDirectory() + L"config_check.ini";
     Config config;
     check(config.corner == Corner::TopLeft && config.singleLine, "left single-line defaults");
+    check(config.offerPawnIOInstall, "fresh installs offer bundled driver setup");
     check(MetricAlert(true, Metric::Fps, 44, 45), "low FPS red");
     check(!MetricAlert(true, Metric::Fps, 45, 45), "FPS boundary normal");
     check(MetricAlert(true, Metric::CpuTemp, 90, 90), "temperature inclusive boundary");
@@ -26,6 +27,7 @@ int main() {
     config.corner = Corner::BottomRight;
     config.alertsEnabled = false;
     config.showRam = true;
+    config.offerPawnIOInstall = false;
     for (size_t i = 0; i < kMetricCount; ++i) config.alertLimits[i] = static_cast<float>(i) + .5f;
     check(SaveConfig(path, config), "save config");
     Config restored;
@@ -33,6 +35,7 @@ int main() {
     check(!restored.singleLine && restored.itemsPerRow == 3 && restored.corner == Corner::BottomRight,
           "layout persists without repeated migration");
     check(!restored.alertsEnabled && restored.showRam, "toggles persist");
+    check(!restored.offerPawnIOInstall, "declined driver install remains declined");
     check(restored.englishMetrics, "English metric style persists");
     check(restored.startupDefaultApplied, "explicit startup preference survives restart");
     check(restored.moduleGap == 27.5f && restored.rowGap == 9.0f, "module and row spacing persist");
