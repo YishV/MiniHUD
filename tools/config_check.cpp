@@ -11,6 +11,8 @@ int main() {
     };
     const std::wstring path = AppDirectory() + L"config_check.ini";
     Config config;
+    check(std::all_of(config.labelColors.begin(),config.labelColors.end(),[](auto rgb){return rgb==0xFFFFFFu;}),"all labels default white");
+    check(config.alertTriggerSeconds==3 && config.alertRecoverySeconds==3,"default debounce timing");
     check(config.corner == Corner::TopLeft && config.singleLine, "left single-line defaults");
     check(config.offerPawnIOInstall, "fresh installs offer bundled driver setup");
     check(MetricAlert(true, Metric::Fps, 44, 45), "low FPS red");
@@ -30,6 +32,9 @@ int main() {
     config.showRam = true;
     config.offerPawnIOInstall = false;
     config.recordHotkey="Alt+F9";
+    config.labelColors[static_cast<size_t>(Metric::CpuTemp)]=0x00FF00u;
+    config.labelColors[static_cast<size_t>(Metric::GpuTemp)]=0x0123ABu;
+    config.alertTriggerSeconds=1.5f; config.alertRecoverySeconds=4.5f;
     config.showLowFps=false; config.showLow01Fps=true;
     MoveMetric(config.metricOrder,static_cast<int>(Metric::GpuTemp),static_cast<int>(Metric::Fps));
     for (size_t i = 0; i < kMetricCount; ++i) config.alertLimits[i] = static_cast<float>(i) + .5f;
@@ -39,6 +44,8 @@ int main() {
     check(!restored.singleLine && restored.itemsPerRow == 3 && restored.corner == Corner::BottomRight,
           "layout persists without repeated migration");
     check(!restored.alertsEnabled && restored.showRam, "toggles persist");
+    check(restored.labelColors==config.labelColors,"RGB colors preserve leading zeroes and round-trip");
+    check(restored.alertTriggerSeconds==1.5f && restored.alertRecoverySeconds==4.5f,"alert delays persist");
     check(restored.metricOrder==config.metricOrder && restored.metricOrder.front()==static_cast<int>(Metric::GpuTemp),"dragged metric order persists");
     check(restored.recordHotkey=="Alt+F9","record hotkey persists");
     check(!restored.showLowFps && restored.showLow01Fps,"low FPS switches are independent");
@@ -59,8 +66,13 @@ int main() {
     config.itemsPerRow = 99;
     config.alertLimits[0] = std::numeric_limits<float>::quiet_NaN();
     config.alertLimits[1] = -1;
+    config.alertTriggerSeconds=std::numeric_limits<float>::quiet_NaN(); config.alertRecoverySeconds=99;
     config.Clamp();
     check(config.itemsPerRow == 8 && config.alertLimits[0] == 45 && config.alertLimits[1] == 0, "invalid config clamped");
+    check(config.alertTriggerSeconds==3 && config.alertRecoverySeconds==10,"invalid alert delays clamped");
+    WritePrivateProfileStringW(L"LabelColors",L"CpuTemp",L"invalid",path.c_str());
+    Config invalidColor;
+    check(LoadConfig(path,invalidColor) && invalidColor.labelColors[static_cast<size_t>(Metric::CpuTemp)]==0xFFFFFFu,"invalid color falls back to white");
     DeleteFileW(path.c_str());
     // Settings belong in the user profile; a pre-0.1.3 file next to the exe is imported once and removed.
     const std::wstring appDataPath = DefaultConfigPath();

@@ -1,4 +1,5 @@
 #include "overlay_ui.h"
+#include "util.h"
 #include <cstdio>
 
 int main() {
@@ -44,6 +45,39 @@ int main() {
     for (const auto* list:ImGui::GetDrawData()->CmdLists)
         for (const auto& vertex:list->VtxBuffer) if (vertex.col==IM_COL32(255,70,70,255)) recordingDot=true;
     snap.recording=false;
+    Config colored;
+    colored.showFps=false; colored.showGpuTemp=false; colored.showVram=false;
+    colored.labelColors[static_cast<size_t>(Metric::CpuTemp)]=0x00FF00u;
+    colored.alertTriggerSeconds=0; colored.alertRecoverySeconds=0;
+    HudRuntime runtime;
+    auto draw=[&] {
+        ImVec2 size;
+        for (int i=0;i<3;++i) {
+            ImGui::NewFrame(); size=DrawStats(colored,snap,ImVec2(0,0),ImVec2(0,0),&runtime); ImGui::Render();
+        }
+        return size;
+    };
+    auto hasColor=[](ImU32 color) {
+        for (const auto* list:ImGui::GetDrawData()->CmdLists)
+            for (const auto& vertex:list->VtxBuffer) if (vertex.col==color) return true;
+        return false;
+    };
+    snap.cpuTemp=75.0f;
+    draw();
+    const bool independentColor=hasColor(IM_COL32(0,255,0,255)) && hasColor(IM_COL32(245,245,245,255)) && !hasColor(IM_COL32(255,89,77,255));
+    snap.cpuTemp=99.0f;
+    const auto twoDigits=draw();
+    const bool redValue=hasColor(ImGui::ColorConvertFloat4ToU32(ImVec4(1,.35f,.3f,1))) && hasColor(IM_COL32(0,255,0,255));
+    snap.cpuTemp=100.0f;
+    const auto threeDigits=draw();
+    snap.cpuTemp=std::nullopt;
+    const auto missingDigits=draw();
+    const bool fixedWidth=twoDigits.x==threeDigits.x && threeDigits.x==missingDigits.x && twoDigits.y==threeDigits.y;
+    runtime.Notify("开始记录",double(Qpc())/double(QpcFrequency()),60);
+    const auto withNotice=draw();
+    runtime.noticeUntil=0;
+    const auto expiredNotice=draw();
+    const bool noticeLayout=withNotice.y>expiredNotice.y && expiredNotice.y==missingDigits.y;
     SettingsState state;
     std::snprintf(state.hotkeyBuf,sizeof(state.hotkeyBuf),"Ctrl+Shift+F12");
     std::snprintf(state.recordHotkeyBuf,sizeof(state.recordHotkeyBuf),"Ctrl+Shift+F11");
@@ -52,7 +86,9 @@ int main() {
     snap.cpuNeedsDriver=true;
     ImGui::NewFrame(); const UiAction missing=DrawSettings(cfg,snap,{},state); ImGui::Render();
     const bool missingOk=missing==UiAction::None;
-    const bool ok=recordingDot && missingOk && englishOk && spacingOk && chineseGlyph && single.x>100 && single.x<1920 && single.y<50 && multi.y>single.y*2 && ImGui::GetDrawData()->TotalVtxCount>0;
+    const bool ok=independentColor && redValue && fixedWidth && noticeLayout && recordingDot && missingOk && englishOk && spacingOk && chineseGlyph && single.x>100 && single.x<1920 && single.y<50 && multi.y>single.y*2 && ImGui::GetDrawData()->TotalVtxCount>0;
+    std::printf("Label/value colors: %s; alert retains label color: %s\n",independentColor?"PASSED":"FAILED",redValue?"PASSED":"FAILED");
+    std::printf("Fixed value width: %s; notice layout restores: %s\n",fixedWidth?"PASSED":"FAILED",noticeLayout?"PASSED":"FAILED");
     std::printf("Recording indicator: %s\n",recordingDot?"PASSED":"FAILED");
     std::printf("Driver-missing settings layout: %s\n",missingOk?"PASSED":"FAILED");
     std::printf("Chinese UI geometry: %s; single %.0fx%.0f; multi %.0fx%.0f\n",ok?"PASSED":"FAILED",single.x,single.y,multi.x,multi.y);

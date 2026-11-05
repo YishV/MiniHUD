@@ -3,6 +3,8 @@
 
 #include "config.h"
 #include "diag.h"
+#include "hardware_summary.h"
+#include "util.h"
 #include "overlay_ui.h"
 #include "overlay_window.h"
 #include "pawnio_setup.h"
@@ -33,6 +35,7 @@ constexpr UINT WM_APP_FOREGROUND = WM_APP + 5;
 constexpr int kHotkeyId = 1;
 constexpr int kRecordHotkeyId = 2;
 constexpr UINT_PTR kTopmostTimer = 1;
+constexpr UINT_PTR kNoticeTimer = 2;
 constexpr UINT kTrayIconId = 1;
 enum : UINT { ID_TRAY_SETTINGS = 100, ID_TRAY_EXIT, ID_TRAY_TOGGLE };
 
@@ -49,6 +52,7 @@ struct App {
     UINT taskbarCreatedMsg = 0;
     SensorHub sensors;
     SensorSnapshot snapshot;
+    HudRuntime hud;
     SettingsState settings;
     std::vector<MonitorInfo> monitors;
     uint32_t metricMask = 0;         // sensors being polled (MetricBits)
@@ -352,6 +356,7 @@ void Quit(App& app) {
 
 void ToggleHud(App& app) {
     app.hudVisible = !app.hudVisible;
+    app.hud.alerts={}; // a hidden period cannot count as continuous threshold evidence
     if (app.hudVisible) AddTrayIcon(app);
     else RemoveTrayIcon(app);
     app.dirty = true;
@@ -411,8 +416,25 @@ LRESULT CALLBACK TrayWndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
 
 std::optional<LRESULT> OverlayMessage(App& app, HWND, UINT msg, WPARAM wp, LPARAM lp) {
     switch (msg) {
-    case WM_APP_SENSORS:
-        app.snapshot = app.sensors.Snapshot();
+    case WM_APP_SENSORS: {
+        auto next=app.sensors.Snapshot();
+        const double now=double(Qpc())/double(QpcFrequency());
+        if (next.recording && !app.snapshot.recording)
+            app.hud.Notify(app.cfg.englishMetrics?"Recording started":"开始记录",now);
+        else if (!next.recording && app.snapshot.recording) {
+            const bool saved=next.recordMessage.find("已保存")!=std::string::npos;
+            app.hud.Notify(app.cfg.englishMetrics ? (saved?"Record saved":"Record not saved") : (saved?"已保存记录":"记录未保存，请查看设置"),now);
+        } else if (!next.recording && !next.recordMessage.empty() && next.recordMessage!=app.snapshot.recordMessage)
+            app.hud.Notify(app.cfg.englishMetrics?"Recording failed":"录制未开始，请查看设置",now);
+        if (app.hud.NoticeVisible(now)) {
+            const auto remaining=std::max(1.0,std::ceil((app.hud.noticeUntil-now)*1000));
+            SetTimer(app.overlay.Hwnd(),kNoticeTimer,static_cast<UINT>(remaining),nullptr);
+        }
+        if (next.foregroundPid!=app.snapshot.foregroundPid) {
+            for (auto metric:{Metric::Fps,Metric::FrameTime,Metric::FpsLow1,Metric::FpsLow01})
+                app.hud.alerts[static_cast<size_t>(metric)]={};
+        }
+        app.snapshot=std::move(next);
         if (wp != kSnapshotGraphOnly) app.dirty = true; // new graph data is drawn on the graph timer
         if (!app.firstSnapshotLogged) {
             app.firstSnapshotLogged = true;
@@ -422,7 +444,13 @@ std::optional<LRESULT> OverlayMessage(App& app, HWND, UINT msg, WPARAM wp, LPARA
             DiagLog("disk: " + app.snapshot.diskStatus);
         }
         return 0;
+    }
     case WM_TIMER:
+        if (wp==kNoticeTimer) {
+            KillTimer(app.overlay.Hwnd(),kNoticeTimer);
+            app.hud.notice.clear(); app.dirty=true;
+            return 0;
+        }
         app.overlay.ReassertTopmost();
         return 0;
     case WM_APP_FOREGROUND:
@@ -460,7 +488,7 @@ void RenderFrame(App& app) {
         pos.x = pivot.x == 0.0f ? (float)app.cfg.offsetX : float(b.right - b.left - app.cfg.offsetX);
         pos.y = pivot.y == 0.0f ? (float)app.cfg.offsetY : float(b.bottom - b.top - app.cfg.offsetY);
     }
-    if (app.hudVisible) app.statsSize = DrawStats(app.cfg, app.snapshot, pos, pivot);
+    if (app.hudVisible) app.statsSize = DrawStats(app.cfg, app.snapshot, pos, pivot,&app.hud);
 
     UiAction action = UiAction::None;
     if (app.settings.open) action = DrawSettings(app.cfg, app.snapshot, app.monitors, app.settings);
@@ -482,6 +510,12 @@ void RenderFrame(App& app) {
     else if (action == UiAction::StopRecording) app.sensors.StopRecording();
     else if (action == UiAction::OpenRecords) OpenRecordsFolder();
     else if (action == UiAction::ExportDiagnostics) ExportDiagnostics(app);
+    else if (action == UiAction::CopyHardwareSummary) {
+        MEMORYSTATUSEX memory{sizeof(memory)};
+        const double ram=GlobalMemoryStatusEx(&memory)?memory.ullTotalPhys/(1024.0*1024*1024):0;
+        const auto summary=BuildHardwareSummary(app.snapshot,app.settings.diskInfo,app.monitors,ram);
+        app.settings.copyMessage=CopyHardwareSummary(app.overlay.Hwnd(),summary)?"已复制配置摘要":"复制失败，请重试";
+    }
     else if (action == UiAction::EnableStartup || action == UiAction::DisableStartup) {
         std::string error;
         const bool enable=action==UiAction::EnableStartup;

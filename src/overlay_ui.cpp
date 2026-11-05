@@ -174,15 +174,20 @@ std::string StatusText(const std::string& text) {
 }
 }
 
-ImVec2 DrawStats(const Config& cfg, const SensorSnapshot& snap, ImVec2 pos, ImVec2 pivot) {
+ImVec2 DrawStats(const Config& cfg, const SensorSnapshot& snap, ImVec2 pos, ImVec2 pivot, HudRuntime* runtime) {
+    static HudRuntime fallback;
+    HudRuntime& hud=runtime ? *runtime : fallback;
+    const double now=double(Qpc())/double(QpcFrequency());
     std::vector<HudItem> items;
     auto add = [&](Metric metric, const std::optional<float>& value, const char* format) {
         const size_t index = static_cast<size_t>(metric);
         char text[80];
         if (value) std::snprintf(text, sizeof(text), format, *value);
         else std::snprintf(text, sizeof(text), "--");
+        const bool hot=hud.alerts[index].Update(metric,value,cfg.alertLimits[index],cfg.alertsEnabled,now,
+            cfg.alertTriggerSeconds,cfg.alertRecoverySeconds);
         items.push_back({static_cast<int>(index), cfg.englishMetrics ? englishLabels[index] : metricLabels[index], text,
-            !value ? kMissingColor : MetricAlert(cfg.alertsEnabled, metric, *value, cfg.alertLimits[index]) ? kHotColor : kValueColor});
+            !value ? kMissingColor : hot ? kHotColor : kValueColor});
     };
     auto temp = [&](Metric metric, const std::optional<float>& value) {
         add(metric, value, "%.0f C");
@@ -220,11 +225,16 @@ ImVec2 DrawStats(const Config& cfg, const SensorSnapshot& snap, ImVec2 pos, ImVe
         add(Metric::NetDown, snap.networkDownMBps, "%.1f MB/s");
         add(Metric::NetUp, snap.networkUpMBps, "%.1f MB/s");
     }
-    if (items.empty() && !cfg.showFrameGraph && !snap.recording) return {};
+    std::array<bool,kMetricCount> visible{};
+    for (const auto& item:items) visible[item.id]=true;
+    for (size_t i=0;i<kMetricCount;++i) if (!visible[i]) hud.alerts[i]={};
+    const bool noticeVisible=hud.NoticeVisible(now);
+    if (items.empty() && !cfg.showFrameGraph && !snap.recording && !noticeVisible) return {};
     std::array<int,kMetricCount> rank{};
     for (size_t i=0;i<kMetricCount;++i) rank[cfg.metricOrder[i]]=static_cast<int>(i);
     std::sort(items.begin(),items.end(),[&](const auto& a,const auto& b){ return rank[a.id]<rank[b.id]; });
     const float fontSize = ImGui::GetStyle().FontSizeBase * cfg.fontScale;
+    if (hud.fontSize!=fontSize) { hud.valueWidths.fill(0); hud.fontSize=fontSize; }
     ImGui::PushFont(nullptr, fontSize);
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(9, 5));
     ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 0);
@@ -245,14 +255,18 @@ ImVec2 DrawStats(const Config& cfg, const SensorSnapshot& snap, ImVec2 pos, ImVe
         const float height = ImGui::GetTextLineHeight() + cfg.rowGap;
         const float available = std::max(100.0f, ImGui::GetIO().DisplaySize.x - 18.0f);
         for (const auto& item : items) {
-            const float itemWidth = ImGui::CalcTextSize(item.label.c_str()).x + 7 +
-                ImGui::CalcTextSize(item.text.c_str()).x;
+            const float labelWidth=ImGui::CalcTextSize(item.label.c_str()).x;
+            const float textWidth=ImGui::CalcTextSize(item.text.c_str()).x;
+            float& valueWidth=hud.valueWidths[item.id];
+            valueWidth=std::max({valueWidth,textWidth,ImGui::CalcTextSize(ValueWidthSample(static_cast<Metric>(item.id),cfg.fahrenheit)).x});
+            const float itemWidth=labelWidth+7+valueWidth;
             if (col && ((!cfg.singleLine && col >= cfg.itemsPerRow) || x + itemWidth > available)) {
                 width = std::max(width, x - cfg.moduleGap); x = 0; ++row; col = 0;
             }
             ImGui::SetCursorPos(ImVec2(start.x + x, start.y + row * height));
-            ImGui::TextColored(ImVec4(.64f,.67f,.70f,1), "%s", item.label.c_str());
-            ImGui::SameLine(0, 7);
+            const auto rgb=cfg.labelColors[item.id];
+            ImGui::TextColored(ImVec4(((rgb>>16)&255)/255.0f,((rgb>>8)&255)/255.0f,(rgb&255)/255.0f,1), "%s", item.label.c_str());
+            ImGui::SetCursorPos(ImVec2(start.x+x+labelWidth+7+valueWidth-textWidth,start.y+row*height));
             ImGui::TextColored(item.color, "%s", item.text.c_str());
             x += itemWidth + cfg.moduleGap; ++col;
         }
@@ -260,6 +274,7 @@ ImVec2 DrawStats(const Config& cfg, const SensorSnapshot& snap, ImVec2 pos, ImVe
         ImGui::SetCursorPos(start);
         ImGui::Dummy(ImVec2(width, items.empty() && !snap.recording ? 0 : (row + 1) * height - cfg.rowGap));
         if (cfg.showFrameGraph) DrawFrameGraph(snap, width);
+        if (noticeVisible) ImGui::TextColored(kValueColor,"%s",hud.notice.c_str());
         size = ImGui::GetWindowSize();
     }
     ImGui::End(); ImGui::PopStyleVar(3); ImGui::PopFont();
@@ -296,6 +311,19 @@ UiAction DrawSettings(Config& cfg, const SensorSnapshot& snap, const std::vector
                 int language=cfg.englishMetrics ? 1 : 0;
                 const char* languages[]={"中文指标", "English 指标"};
                 if (ImGui::Combo("指标语言", &language, languages, 2)) cfg.englishMetrics=language==1;
+                if (ImGui::TreeNode("指标名称颜色")) {
+                    ImGui::TextWrapped("只修改名称颜色；数值保持正常白色、告警红色，无数据为灰色。默认所有名称为白色。");
+                    for (size_t i=0;i<kMetricCount;++i) {
+                        const auto rgb=cfg.labelColors[i];
+                        float color[]={((rgb>>16)&255)/255.0f,((rgb>>8)&255)/255.0f,(rgb&255)/255.0f};
+                        ImGui::PushID(static_cast<int>(i));
+                        if (ImGui::ColorEdit3(metricLabels[i],color,ImGuiColorEditFlags_NoInputs|ImGuiColorEditFlags_NoAlpha))
+                            cfg.labelColors[i]=(uint32_t(std::lround(color[0]*255))<<16)|(uint32_t(std::lround(color[1]*255))<<8)|uint32_t(std::lround(color[2]*255));
+                        ImGui::PopID();
+                    }
+                    if (ImGui::Button("名称全部恢复白色")) cfg.labelColors.fill(0xFFFFFFu);
+                    ImGui::TreePop();
+                }
                 ImGui::Checkbox("单行显示", &cfg.singleLine);
                 if (!cfg.singleLine) ImGui::SliderInt("每行指标数量", &cfg.itemsPerRow, 1, 8);
                 ImGui::SliderFloat("指标水平间距", &cfg.moduleGap, 0, 80, "%.0f px");
@@ -374,6 +402,9 @@ UiAction DrawSettings(Config& cfg, const SensorSnapshot& snap, const std::vector
                 ImGui::Checkbox("启用红色告警",&cfg.alertsEnabled);
                 ImGui::TextWrapped("帧率低于阈值时标红；其他指标达到阈值时标红。填 0 关闭单项告警。温度阈值为摄氏度，内存和显存按占用百分比判断。阈值是提醒设置，不是硬件安全上限。");
                 ImGui::BeginDisabled(!cfg.alertsEnabled);
+                ImGui::SliderFloat("连续超标时间",&cfg.alertTriggerSeconds,0,10,"%.1f 秒");
+                ImGui::SliderFloat("恢复等待时间",&cfg.alertRecoverySeconds,0,10,"%.1f 秒");
+                ImGui::TextWrapped("默认连续超标 3 秒才标红。恢复需回落一定幅度并持续 3 秒，例如温度 90℃ 告警后，降至 87℃ 才开始计时。时间设为 0 可立即切换；检查随刷新间隔进行。");
                 for (size_t i=0;i<kMetricCount;++i) {
                     ImGui::PushID(static_cast<int>(i));
                     ImGui::SetNextItemWidth(120);
@@ -382,14 +413,14 @@ UiAction DrawSettings(Config& cfg, const SensorSnapshot& snap, const std::vector
                     ImGui::PopID();
                 }
                 ImGui::EndDisabled();
-                if (ImGui::Button("恢复默认阈值")) cfg.alertLimits=kDefaultLimits;
+                if (ImGui::Button("恢复默认阈值")) { cfg.alertLimits=kDefaultLimits; cfg.alertTriggerSeconds=3; cfg.alertRecoverySeconds=3; }
                 ImGui::EndChild(); ImGui::EndTabItem();
             }
             if (ImGui::BeginTabItem("性能记录")) {
                 ImGui::BeginChild("##record", ImVec2(0,-45));
                 ImGui::TextWrapped("记录游戏过程中的帧率和温度。停止后会生成每秒明细 CSV 和一份可读报告，保存在 %%APPDATA%%\\MiniHUD\\records。");
                 ImGui::Text("录制快捷键：%s",cfg.recordHotkey.c_str());
-                ImGui::TextWrapped("黑条上的小红点表示正在录制。隐藏黑条不会停止录制；再次按录制快捷键停止。");
+                ImGui::TextWrapped("黑条上的小红点表示正在录制。开始和保存后会短暂提示 3 秒。隐藏黑条不会停止录制或自动弹出提示；再次按录制快捷键停止。");
                 if (snap.recording) {
                     ImGui::Text("正在记录：%d 分 %02d 秒，样本 %d 个", int(snap.recordSeconds)/60, int(snap.recordSeconds)%60, snap.recordSamples);
                     if (ImGui::Button("停止并生成报告")) action=UiAction::StopRecording;
@@ -404,6 +435,9 @@ UiAction DrawSettings(Config& cfg, const SensorSnapshot& snap, const std::vector
             }
             if (ImGui::BeginTabItem("电脑配置")) {
                 ImGui::BeginChild("##computer",ImVec2(0,-45));
+                if (ImGui::Button("复制配置摘要")) action=UiAction::CopyHardwareSummary;
+                ImGui::SetItemTooltip("复制 CPU、显卡、内存、主板、硬盘和显示器信息，不包含序列号或日志。");
+                if (!state.copyMessage.empty()) { ImGui::SameLine(); ImGui::TextUnformatted(state.copyMessage.c_str()); }
                 MEMORYSTATUSEX memory{sizeof(memory)}; GlobalMemoryStatusEx(&memory);
                 ImGui::TextWrapped("处理器：%s",snap.cpuName.c_str());
                 if (snap.cpuCores) {

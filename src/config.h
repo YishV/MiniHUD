@@ -25,6 +25,11 @@ struct Config {
     float rowGap = 4.0f;
     bool alertsEnabled = true;
     std::array<float, kMetricCount> alertLimits = kDefaultLimits;
+    float alertTriggerSeconds=3.0f;
+    float alertRecoverySeconds=3.0f;
+    std::array<uint32_t,kMetricCount> labelColors=[] {
+        std::array<uint32_t,kMetricCount> colors{}; colors.fill(0xFFFFFFu); return colors;
+    }();
     int offsetX = 0;
     int offsetY = 0;
     int monitor = 0;              // 0 = primary, then the remaining monitors in enumeration order

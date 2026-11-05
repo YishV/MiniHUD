@@ -3,6 +3,7 @@
 #include <cstddef>
 #include <cmath>
 #include <algorithm>
+#include <cstdint>
 
 enum class Metric : size_t { Fps, FrameTime, CpuUsage, CpuTemp, GpuUsage, GpuTemp,
     CpuPower, GpuPower, Vram, Ram, DiskTemp, DiskRead, DiskWrite, NetDown, NetUp,

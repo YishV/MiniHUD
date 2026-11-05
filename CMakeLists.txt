@@ -126,6 +126,7 @@ add_executable(fps_monitor WIN32
     src/recorder.cpp
     src/diag.cpp
     src/hardware_info.cpp
+    src/hardware_summary.cpp
     src/startup_task.cpp
     src/overlay_window.cpp
     src/overlay_ui.cpp
@@ -209,3 +210,9 @@ target_include_directories(minihud_hardware_probe PRIVATE src)
 target_compile_definitions(minihud_hardware_probe PRIVATE WIN32_LEAN_AND_MEAN NOMINMAX UNICODE _UNICODE)
 target_compile_options(minihud_hardware_probe PRIVATE /utf-8)
 target_link_libraries(minihud_hardware_probe PRIVATE powrprof pdh iphlpapi)
+
+add_executable(minihud_hud_check EXCLUDE_FROM_ALL tools/hud_check.cpp src/hardware_summary.cpp)
+target_include_directories(minihud_hud_check PRIVATE src)
+target_compile_definitions(minihud_hud_check PRIVATE WIN32_LEAN_AND_MEAN NOMINMAX UNICODE _UNICODE)
+target_compile_options(minihud_hud_check PRIVATE /utf-8)
+target_link_libraries(minihud_hud_check PRIVATE imgui user32)

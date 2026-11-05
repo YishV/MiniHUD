@@ -8,6 +8,7 @@
 #include <cstring>
 #include <shlobj.h>
 #include <sstream>
+#include <iomanip>
 #include <vector>
 
 namespace {
@@ -59,6 +60,9 @@ Corner ParseCorner(const std::string& s, Corner def) {
 } // namespace
 
 void Config::Clamp() {
+    alertTriggerSeconds=std::isfinite(alertTriggerSeconds)?std::clamp(alertTriggerSeconds,0.0f,10.0f):3.0f;
+    alertRecoverySeconds=std::isfinite(alertRecoverySeconds)?std::clamp(alertRecoverySeconds,0.0f,10.0f):3.0f;
+    for (auto& color:labelColors) color&=0xFFFFFFu;
     std::array<bool,kMetricCount> seen{};
     std::array<int,kMetricCount> normalized{};
     size_t next=0;
@@ -152,9 +156,14 @@ bool LoadConfig(const std::wstring& path, Config& cfg) {
         cfg.singleLine = true;
     }
     cfg.alertsEnabled = ReadBool(path, L"Alerts", L"Enabled", cfg.alertsEnabled);
+    cfg.alertTriggerSeconds=ReadFloat(path,L"Alerts",L"TriggerSeconds",cfg.alertTriggerSeconds);
+    cfg.alertRecoverySeconds=ReadFloat(path,L"Alerts",L"RecoverySeconds",cfg.alertRecoverySeconds);
     for (size_t i = 0; i < kMetricCount; ++i) {
         const std::wstring key(kMetricKeys[i], kMetricKeys[i] + std::strlen(kMetricKeys[i]));
         cfg.alertLimits[i] = ReadFloat(path, L"Alerts", key.c_str(), cfg.alertLimits[i]);
+        const auto color=ReadString(path,L"LabelColors",key.c_str(),"");
+        if (color.size()==6 && std::all_of(color.begin(),color.end(),[](unsigned char ch){return std::isxdigit(ch)!=0;}))
+            cfg.labelColors[i]=static_cast<uint32_t>(std::stoul(color,nullptr,16));
     }
 
     const wchar_t* me = L"Metrics";
@@ -251,6 +260,8 @@ bool SaveConfig(const std::wstring& path, const Config& cfg) {
     std::ostringstream extra;
     extra << "\r\n[Alerts]\r\nEnabled=" << cfg.alertsEnabled << "\r\n";
     for (size_t i = 0; i < kMetricCount; ++i) extra << kMetricKeys[i] << '=' << cfg.alertLimits[i] << "\r\n";
+    extra<<"TriggerSeconds="<<cfg.alertTriggerSeconds<<"\r\nRecoverySeconds="<<cfg.alertRecoverySeconds<<"\r\n\r\n[LabelColors]\r\n";
+    for (size_t i=0;i<kMetricCount;++i) extra<<kMetricKeys[i]<<'='<<std::hex<<std::setw(6)<<std::setfill('0')<<cfg.labelColors[i]<<"\r\n";
     std::string output(buf, len);
     output.insert(output.find("[Metrics]"), "LayoutVersion=2\r\nSingleLine=" + std::to_string(cfg.singleLine) +
                   "\r\nItemsPerRow=" + std::to_string(cfg.itemsPerRow) +
