@@ -61,12 +61,16 @@ struct Config {
     void Clamp();
 };
 
-// config.ini next to the executable.
+// %APPDATA%\MiniHUD\config.ini (the app folder if the known folder is unavailable).
 std::wstring DefaultConfigPath();
 
 // Returns false if the file did not exist (cfg keeps defaults for missing keys either way).
 bool LoadConfig(const std::wstring& path, Config& cfg);
 bool SaveConfig(const std::wstring& path, const Config& cfg);
+
+// Loads `path`. When it is missing, imports the pre-0.1.3 config.ini from the app folder and
+// removes that file. Always leaves a config on disk; true if settings came from an existing file.
+bool LoadConfigOrMigrate(const std::wstring& path, Config& cfg);
 
 const char* CornerToString(Corner c);
 

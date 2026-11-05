@@ -9,3 +9,7 @@ MiniHUD 不内置 PawnIO 安装器（v0.1.2 起）。缺少驱动时，程序在
 - 官方下载站：https://pawnio.eu/
 
 第三方代码与二进制的版权归原作者所有。MiniHUD 源码及其上游的 AGPL-3.0 许可证见 LICENSE；原项目完整说明见 UPSTREAM.md。
+
+## 安装包
+
+安装包由 Inno Setup 6 生成。安装界面的简体中文语言文件来自 [kira-96/Inno-Setup-Chinese-Simplified-Translation](https://github.com/kira-96/Inno-Setup-Chinese-Simplified-Translation)，MIT License，Copyright (c) 2019 - 2020 kirakira。

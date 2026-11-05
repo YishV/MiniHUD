@@ -51,6 +51,20 @@ int main() {
     config.Clamp();
     check(config.itemsPerRow == 8 && config.alertLimits[0] == 45 && config.alertLimits[1] == 0, "invalid config clamped");
     DeleteFileW(path.c_str());
+    // Settings belong in the user profile; a pre-0.1.3 file next to the exe is imported once and removed.
+    const std::wstring appDataPath = DefaultConfigPath();
+    check(appDataPath.find(L"MiniHUD\\config.ini") != std::wstring::npos, "config path lives in the user profile");
+    const std::wstring legacyPath = AppDirectory() + L"config.ini";
+    const std::wstring migratedPath = AppDirectory() + L"config_migrated.ini";
+    DeleteFileW(legacyPath.c_str());
+    DeleteFileW(migratedPath.c_str());
+    WritePrivateProfileStringW(L"Overlay", L"Corner", L"BottomLeft", legacyPath.c_str());
+    WritePrivateProfileStringW(L"Overlay", L"LayoutVersion", L"2", legacyPath.c_str());
+    Config migrated;
+    check(LoadConfigOrMigrate(migratedPath, migrated) && migrated.corner == Corner::BottomLeft,
+          "legacy config next to the exe is imported");
+    check(GetFileAttributesW(legacyPath.c_str()) == INVALID_FILE_ATTRIBUTES, "imported legacy file is removed");
+    DeleteFileW(migratedPath.c_str());
     std::printf("Config and alert checks: %s (%d failures)\n", failures ? "FAILED" : "PASSED", failures);
     return failures ? 1 : 0;
 }

@@ -4,17 +4,17 @@ Windows 游戏性能小黑卡。默认在屏幕左上角用单行显示帧率、
 
 ## 下载
 
-[下载 Windows x64 EXE](https://github.com/YishV/MiniHUD/releases/latest/download/MiniHUD.exe) · [查看所有版本](https://github.com/YishV/MiniHUD/releases)
+[下载 Windows 安装包](https://github.com/YishV/MiniHUD/releases/latest/download/MiniHUD-Setup.exe) · [查看所有版本](https://github.com/YishV/MiniHUD/releases)
 
-便携使用：把 EXE 放到固定目录后运行。发布页提供 ZIP 包、源代码和 SHA-256 校验文件。
+安装包按当前用户装到 `%LocalAppData%\Programs\MiniHUD`，不需要管理员权限即可安装；会创建开始菜单快捷方式和可选的桌面图标，可在「设置 → 应用」里卸载。安装完成后启动 MiniHUD 时仍需同意 Windows 管理员提示。喜欢绿色的可在发布页下载 `MiniHUD-v*-win-x64.zip`，解压后放到固定目录运行；发布页同时提供 SHA-256 校验文件。
 
 ![MiniHUD 猫咪图标](resources/cat-preview.png)
 
 ## 运行
 
-双击 `release\MiniHUD.exe`。首次运行若弹出 Windows 管理员提示，需要同意才能采集 ETW 帧率。`Ctrl+Shift+F12` 显示或隐藏小黑条；黑条显示时点击托盘图标打开设置，右键可隐藏或退出。隐藏黑条时托盘图标也隐藏，再按相同快捷键即可恢复两者；也可再次运行程序打开设置。
+从开始菜单启动 MiniHUD（免安装版直接双击 `MiniHUD.exe`）。首次运行若弹出 Windows 管理员提示，需要同意才能采集 ETW 帧率。`Ctrl+Shift+F12` 显示或隐藏小黑条；黑条显示时点击托盘图标打开设置，右键可隐藏或退出。隐藏黑条时托盘图标也隐藏，再按相同快捷键即可恢复两者；也可再次运行程序打开设置。
 
-中文设置窗口的 **显示设置** 页可开关指标，切换单行/多行（每行 1–8 项），切换中文 / English 指标，调整指标水平间距、行间距、位置、大小、透明度和刷新间隔；**告警阈值** 页可修改各项标红阈值；**电脑配置** 页显示 CPU、GPU、内存和磁盘型号及传感器状态。关闭设置时保存到程序旁的 `config.ini`。
+中文设置窗口的 **显示设置** 页可开关指标，切换单行/多行（每行 1–8 项），切换中文 / English 指标，调整指标水平间距、行间距、位置、大小、透明度和刷新间隔；**告警阈值** 页可修改各项标红阈值；**电脑配置** 页显示 CPU、GPU、内存和磁盘型号及传感器状态。设置保存在 `%APPDATA%\MiniHUD\config.ini`，卸载程序不会删除它。从旧版本升级时，程序旁旧的 `config.ini` 会在首次启动时自动迁移过去并删除，下载目录不会再留下配置文件。
 
 | 指标 | 数据来源 | 默认 |
 |---|---|---|
@@ -47,9 +47,13 @@ Windows 游戏性能小黑卡。默认在屏幕左上角用单行显示帧率、
 ```powershell
 cmake -S . -B build\vs2022-final -G "Visual Studio 17 2022" -A x64
 cmake --build build\vs2022-final --config Release --parallel 4
-New-Item -ItemType Directory release -Force | Out-Null
-Copy-Item build\vs2022-final\Release\MiniHUD.exe release\MiniHUD.exe
+
+# 安装包：需要 Inno Setup 6（winget install JRSoftware.InnoSetup）
+& "$env:LOCALAPPDATA\Programs\Inno Setup 6\ISCC.exe" installer\minihud.iss `
+  /DBuildDir=..\build\vs2022-final\Release /DAppVersion=0.1.3
 ```
+
+生成的安装包在 `release\v0.1.3\MiniHUD-Setup.exe`，安装到 `%LocalAppData%\Programs\MiniHUD`。
 
 ## 来源与许可
 
@@ -57,4 +61,4 @@ Copy-Item build\vs2022-final\Release\MiniHUD.exe release\MiniHUD.exe
 
 ## 第三方驱动
 
-PawnIO 安装器保持官方原样，来源为 [PawnIO.Setup 2.2.0](https://github.com/namazso/PawnIO.Setup/releases/tag/2.2.0)。驱动源代码和许可证见 [PawnIO](https://github.com/namazso/PawnIO)，模块源代码见 [PawnIO.Modules](https://github.com/namazso/PawnIO.Modules)。安装器内嵌不会增加常驻进程；只有用户确认安装时才释放运行。
+PawnIO 安装器保持官方原样，来源为 [PawnIO.Setup 2.2.0](https://github.com/namazso/PawnIO.Setup/releases/tag/2.2.0)。驱动源代码和许可证见 [PawnIO](https://github.com/namazso/PawnIO)，模块源代码见 [PawnIO.Modules](https://github.com/namazso/PawnIO.Modules)。MiniHUD 不内置、也不自动下载或运行安装器；只有你在官方页面下载并确认后才会安装，驱动本身不增加常驻进程。

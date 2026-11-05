@@ -463,7 +463,7 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int) {
     app.hudVisible=true; // both manual launch and login startup show the HUD
     g_app = &app;
     app.configPath = DefaultConfigPath();
-    if (!LoadConfig(app.configPath, app.cfg)) SaveConfig(app.configPath, app.cfg);
+    LoadConfigOrMigrate(app.configPath, app.cfg);
     if (!app.cfg.startupDefaultApplied) {
         std::string error;
         if (SetStartup(true,error)) {

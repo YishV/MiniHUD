@@ -6,6 +6,7 @@
 #include <cctype>
 #include <cstdio>
 #include <cstring>
+#include <shlobj.h>
 #include <sstream>
 #include <vector>
 
@@ -73,7 +74,37 @@ void Config::Clamp() {
     onlyWhenFocused = onlyWhenFocused && onlyWithGame;
 }
 
-std::wstring DefaultConfigPath() { return AppDirectory() + L"config.ini"; }
+// %APPDATA%\MiniHUD\, created on demand; empty if the known folder is unavailable.
+std::wstring ConfigDirectory() {
+    PWSTR roaming = nullptr;
+    if (FAILED(SHGetKnownFolderPath(FOLDERID_RoamingAppData, KF_FLAG_CREATE, nullptr, &roaming)) || !roaming) return {};
+    std::wstring dir(roaming);
+    CoTaskMemFree(roaming);
+    if (dir.empty()) return {};
+    if (dir.back() != L'\\') dir += L'\\';
+    dir += L"MiniHUD";
+    CreateDirectoryW(dir.c_str(), nullptr);
+    return dir + L'\\';
+}
+
+std::wstring DefaultConfigPath() {
+    const std::wstring dir = ConfigDirectory();
+    // Settings live in the user profile, so an installed copy in Program Files works and the
+    // download folder stays clean. Fall back to the app folder if the known folder is missing.
+    return dir.empty() ? AppDirectory() + L"config.ini" : dir + L"config.ini";
+}
+
+bool LoadConfigOrMigrate(const std::wstring& path, Config& cfg) {
+    if (LoadConfig(path, cfg)) return true;
+    const std::wstring legacy = AppDirectory() + L"config.ini";
+    if (CompareStringOrdinal(path.c_str(), -1, legacy.c_str(), -1, TRUE) != CSTR_EQUAL && LoadConfig(legacy, cfg)) {
+        SaveConfig(path, cfg);
+        DeleteFileW(legacy.c_str());
+        return true;
+    }
+    SaveConfig(path, cfg);
+    return false;
+}
 
 const char* CornerToString(Corner c) {
     switch (c) {
