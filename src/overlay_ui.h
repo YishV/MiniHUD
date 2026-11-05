@@ -11,7 +11,7 @@
 #include <string>
 #include <vector>
 
-enum class UiAction { None, CloseSettings, ExitApp, InstallPawnIO, EnableStartup, DisableStartup };
+enum class UiAction { None, CloseSettings, ExitApp, InstallPawnIO, OpenPawnIODownload, EnableStartup, DisableStartup };
 
 struct SettingsState {
     bool open = false;

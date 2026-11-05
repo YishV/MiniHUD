@@ -360,7 +360,14 @@ UiAction DrawSettings(Config& cfg, const SensorSnapshot& snap, const std::vector
                 ImGui::TextWrapped("帧率：%s",StatusText(snap.fpsStatus).c_str());
                 ImGui::TextWrapped("CPU：%s",StatusText(snap.cpuStatus).c_str());
                 if (state.pawnioInstalling) ImGui::TextUnformatted("正在安装 PawnIO...");
-                else if (snap.cpuNeedsDriver && PawnIOSetupBundled() && ImGui::Button("安装 PawnIO 驱动")) action=UiAction::InstallPawnIO;
+                else if (snap.cpuNeedsDriver) {
+                    if (PawnIOSetupBundled()) {
+                        if (ImGui::Button("安装 PawnIO 驱动")) action=UiAction::InstallPawnIO;
+                    } else {
+                        if (ImGui::Button("下载 PawnIO 驱动")) action=UiAction::OpenPawnIODownload;
+                        ImGui::SetItemTooltip("在浏览器中打开官方下载页。安装完成后关闭并重新打开设置即可重新检测。");
+                    }
+                }
                 if (!state.pawnioMessage.empty()) ImGui::TextWrapped("%s",state.pawnioMessage.c_str());
                 ImGui::TextWrapped("GPU：%s",StatusText(snap.gpuStatus).c_str());
                 ImGui::TextWrapped("SSD：%s",StatusText(state.diskInfo.status).c_str());

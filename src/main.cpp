@@ -216,6 +216,8 @@ void RenderFrame(App& app);
 void OpenSettings(App& app) {
     if (app.settings.open) return;
     app.settings.startup=QueryStartup();
+    // The user may have installed the PawnIO driver from the browser while we were running.
+    if (app.snapshot.cpuNeedsDriver) app.sensors.ReinitPawnIO();
     app.previousForeground = GetForegroundWindow();
     app.monitors = EnumerateMonitors();
     std::snprintf(app.settings.hotkeyBuf, sizeof(app.settings.hotkeyBuf), "%s", app.cfg.hotkey.c_str());
@@ -393,6 +395,11 @@ void RenderFrame(App& app) {
     if (action == UiAction::CloseSettings) CloseSettings(app);
     else if (action == UiAction::ExitApp) Quit(app);
     else if (action == UiAction::InstallPawnIO) StartPawnIOInstall(app);
+    else if (action == UiAction::OpenPawnIODownload) {
+        app.settings.pawnioMessage = OpenPawnIODownloadPage()
+            ? "已打开 PawnIO 官方下载页。安装完成后关闭并重新打开设置即可重新检测。"
+            : "无法打开浏览器，请手动访问 github.com/namazso/PawnIO.Setup/releases";
+    }
     else if (action == UiAction::EnableStartup || action == UiAction::DisableStartup) {
         std::string error;
         const bool enable=action==UiAction::EnableStartup;

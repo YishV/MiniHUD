@@ -39,7 +39,12 @@ int main() {
     SettingsState state;
     std::snprintf(state.hotkeyBuf,sizeof(state.hotkeyBuf),"Ctrl+Shift+F12");
     ImGui::NewFrame(); DrawSettings(cfg,snap,{},state); ImGui::Render();
-    const bool ok=englishOk && spacingOk && chineseGlyph && single.x>100 && single.x<1920 && single.y<50 && multi.y>single.y*2 && ImGui::GetDrawData()->TotalVtxCount>0;
+    // Driver missing: renders the install button (bundled build) or the download button (default).
+    snap.cpuNeedsDriver=true;
+    ImGui::NewFrame(); const UiAction missing=DrawSettings(cfg,snap,{},state); ImGui::Render();
+    const bool missingOk=missing==UiAction::None;
+    const bool ok=missingOk && englishOk && spacingOk && chineseGlyph && single.x>100 && single.x<1920 && single.y<50 && multi.y>single.y*2 && ImGui::GetDrawData()->TotalVtxCount>0;
+    std::printf("Driver-missing settings layout: %s\n",missingOk?"PASSED":"FAILED");
     std::printf("Chinese UI geometry: %s; single %.0fx%.0f; multi %.0fx%.0f\n",ok?"PASSED":"FAILED",single.x,single.y,multi.x,multi.y);
     std::printf("English metric style: %s; %.0fx%.0f\n",englishOk?"PASSED":"FAILED",english.x,english.y);
     ImGui::DestroyContext();

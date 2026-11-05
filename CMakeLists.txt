@@ -57,7 +57,10 @@ pawnio_module_rc_path(PAWNIO_INTELMSR_MODULE_RC IntelMSR.bin)
 
 # The official, signed PawnIO installer, embedded so users can install the driver
 # from inside the app (it runs "PawnIO_setup.exe -install -silent" after asking).
-option(FPS_MONITOR_BUNDLE_PAWNIO "Embed the PawnIO driver installer in the executable" ON)
+# Off by default: an unsigned host executable that carries a second, uncompressed PE and
+# drops it into %TEMP% matches dropper heuristics, so Microsoft Defender flags the result
+# as Trojan:Win32/Wacatac.H!ml. Keep the embedding optional for signed/private builds.
+option(FPS_MONITOR_BUNDLE_PAWNIO "Embed the PawnIO driver installer in the executable" OFF)
 set(PAWNIO_SETUP_VERSION "2.2.0")
 set(PAWNIO_SETUP_RC_LINE "")
 if(FPS_MONITOR_BUNDLE_PAWNIO)

@@ -44,6 +44,12 @@ bool PawnIOSetupBundled() {
     return FindSetupResource(data, size);
 }
 
+bool OpenPawnIODownloadPage() {
+    const auto result = reinterpret_cast<INT_PTR>(
+        ShellExecuteW(nullptr, L"open", kPawnIODownloadUrl, nullptr, nullptr, SW_SHOWNORMAL));
+    return result > 32; // ShellExecute returns a value <= 32 on failure
+}
+
 bool RunBundledPawnIOSetup(std::string& error) {
     const void* data;
     DWORD size;
