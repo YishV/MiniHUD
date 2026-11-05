@@ -26,13 +26,11 @@ Windows 游戏性能小黑卡。默认在屏幕左上角用单行显示帧率、
 | 磁盘读写速度 | Windows PDH 所有物理磁盘总吞吐 | 关 |
 | 网速上传/下载 | Windows 活跃网卡累计字节差分 | 关 |
 
-当前 CPU 温度采集通过 [PawnIO](https://github.com/namazso/PawnIO) 驱动实现。发布版不内置安装器：内嵌的安装器会让未签名的 EXE 带上“体内藏一个可执行文件、释放到临时目录再运行”的特征，被杀软误报为木马（v0.1.1 曾被 Defender 判为 `Trojan:Win32/Wacatac.H!ml`）。缺少驱动时在“电脑配置”页点击“下载 PawnIO 驱动”打开官方下载页，安装完成后关闭并重新打开设置即可重新检测。安装需要管理员权限；已安装兼容驱动时不重复提示。未安装时其余指标照常可用。温度与速率采集取决于设备和驱动支持。独占全屏游戏不保证显示。
+当前 CPU 温度采集通过 [PawnIO](https://github.com/namazso/PawnIO) 驱动实现。发布版不内置安装器：在“电脑配置”页点击“安装 PawnIO 驱动”，程序会从官方地址下载安装器、校验 SHA-256 后以管理员权限静默安装；也可以点“手动下载”自己装。安装需要网络连接和管理员权限，完成后关闭并重新打开设置即可重新检测；已安装兼容驱动时不再提示。未安装时其余指标照常可用。温度与速率采集取决于设备和驱动支持。独占全屏游戏不保证显示。
 
-## 登录自启动与图标
+## 登录自启动
 
 在“显示设置 → 行为”中勾选“登录 Windows 后自动启动”。新版首次运行默认启用并更新启动任务；之后在设置里主动关闭会保留选择。开关读取和更新当前用户的 Windows 计划任务状态。任务仅在当前用户登录约 8 秒后，以交互式管理员权限运行当前程序并传入 `--autostart`；黑条和托盘图标自动显示。快捷键隐藏黑条时托盘也隐藏，再按快捷键同时恢复。手动运行与自启的显示逻辑一致。不保存账户密码。关闭开关会删除 MiniHUD 自己的启动任务。程序移动后，设置会提示更新启动路径。请从固定安装目录启用；Windows 自身的节能或组织策略仍可能影响启动。
-
-图标是原创白底深灰线条猫，托盘和 EXE 使用同一组 16–256 像素图标。SVG 源文件在 `resources/icon.svg`，执行 `python tools/make_icon.py` 或 `powershell -File tools/make_icon.ps1` 可重新生成 ICO，不依赖额外 Python 包。
 
 ## 告警与布局
 
@@ -50,10 +48,10 @@ cmake --build build\vs2022-final --config Release --parallel 4
 
 # 安装包：需要 Inno Setup 6（winget install JRSoftware.InnoSetup）
 & "$env:LOCALAPPDATA\Programs\Inno Setup 6\ISCC.exe" installer\minihud.iss `
-  /DBuildDir=..\build\vs2022-final\Release /DAppVersion=0.1.3
+  /DBuildDir=..\build\vs2022-final\Release /DAppVersion=1.0.0
 ```
 
-生成的安装包在 `release\v0.1.3\MiniHUD-Setup.exe`，安装到 `%LocalAppData%\Programs\MiniHUD`。
+生成的安装包在 `release\v1.0.0\MiniHUD-Setup.exe`，安装到 `%LocalAppData%\Programs\MiniHUD`。
 
 ## 来源与许可
 
@@ -61,4 +59,4 @@ cmake --build build\vs2022-final --config Release --parallel 4
 
 ## 第三方驱动
 
-PawnIO 安装器保持官方原样，来源为 [PawnIO.Setup 2.2.0](https://github.com/namazso/PawnIO.Setup/releases/tag/2.2.0)。驱动源代码和许可证见 [PawnIO](https://github.com/namazso/PawnIO)，模块源代码见 [PawnIO.Modules](https://github.com/namazso/PawnIO.Modules)。MiniHUD 不内置、也不自动下载或运行安装器；只有你在官方页面下载并确认后才会安装，驱动本身不增加常驻进程。
+PawnIO 安装器保持官方原样，来源为 [PawnIO.Setup 2.2.0](https://github.com/namazso/PawnIO.Setup/releases/tag/2.2.0)。驱动源代码和许可证见 [PawnIO](https://github.com/namazso/PawnIO)，模块源代码见 [PawnIO.Modules](https://github.com/namazso/PawnIO.Modules)。MiniHUD 不内置安装器：只有你点击“安装 PawnIO 驱动”时才会从官方地址下载，固定 SHA-256 `1f519a22…` 校验通过后才以管理员权限运行；也可以自己从官方页面下载安装。驱动本身不增加常驻进程。

@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.24)
+﻿cmake_minimum_required(VERSION 3.24)
 project(fps_monitor LANGUAGES CXX RC)
 
 set(CMAKE_CXX_STANDARD 20)
@@ -143,7 +143,7 @@ target_include_directories(fps_monitor SYSTEM PRIVATE "${ADL_SDK_INCLUDE_DIR}")
 target_compile_definitions(fps_monitor PRIVATE UNICODE _UNICODE WIN32_LEAN_AND_MEAN NOMINMAX WINVER=0x0A00 _WIN32_WINNT=0x0A00 NTDDI_VERSION=0x0A000000)
 target_compile_options(fps_monitor PRIVATE /W4 /permissive- /utf-8)
 target_link_libraries(fps_monitor PRIVATE
-    imgui d3d11 dxgi dcomp pdh iphlpapi advapi32 gdi32 shell32 user32 taskschd ole32 oleaut32)
+    imgui d3d11 dxgi dcomp pdh iphlpapi advapi32 gdi32 shell32 user32 taskschd ole32 oleaut32 winhttp bcrypt)
 set_target_properties(fps_monitor PROPERTIES OUTPUT_NAME MiniHUD)
 
 # ETW kernel providers and the PawnIO driver both require elevation.
@@ -157,11 +157,18 @@ target_include_directories(minihud_sensor_probe PRIVATE src)
 target_compile_definitions(minihud_sensor_probe PRIVATE WIN32_LEAN_AND_MEAN NOMINMAX WINVER=0x0A00 _WIN32_WINNT=0x0A00 NTDDI_VERSION=0x0A000000)
 target_link_libraries(minihud_sensor_probe PRIVATE pdh iphlpapi)
 
+add_executable(minihud_pawnio_probe EXCLUDE_FROM_ALL tools/pawnio_probe.cpp src/pawnio_setup.cpp)
+target_include_directories(minihud_pawnio_probe PRIVATE src resources)
+target_compile_definitions(minihud_pawnio_probe PRIVATE WIN32_LEAN_AND_MEAN NOMINMAX UNICODE _UNICODE)
+target_compile_options(minihud_pawnio_probe PRIVATE /utf-8)
+target_link_libraries(minihud_pawnio_probe PRIVATE advapi32 shell32 winhttp bcrypt)
+target_link_options(minihud_pawnio_probe PRIVATE "/MANIFESTUAC:level='asInvoker' uiAccess='false'")
+
 add_executable(minihud_cpu_probe EXCLUDE_FROM_ALL
     tools/cpu_probe.cpp src/sensors/cpu_pawnio.cpp src/pawnio_setup.cpp ${CMAKE_CURRENT_BINARY_DIR}/app.rc)
 target_include_directories(minihud_cpu_probe PRIVATE src resources)
 target_compile_definitions(minihud_cpu_probe PRIVATE WIN32_LEAN_AND_MEAN NOMINMAX UNICODE _UNICODE)
-target_link_libraries(minihud_cpu_probe PRIVATE advapi32 shell32)
+target_link_libraries(minihud_cpu_probe PRIVATE advapi32 shell32 winhttp bcrypt)
 target_link_options(minihud_cpu_probe PRIVATE "/MANIFESTUAC:level='requireAdministrator' uiAccess='false'")
 
 add_executable(minihud_config_check EXCLUDE_FROM_ALL tools/config_check.cpp src/config.cpp)
@@ -173,7 +180,7 @@ add_executable(minihud_ui_check EXCLUDE_FROM_ALL tools/ui_check.cpp src/overlay_
 target_include_directories(minihud_ui_check PRIVATE src resources)
 target_compile_definitions(minihud_ui_check PRIVATE WIN32_LEAN_AND_MEAN NOMINMAX UNICODE _UNICODE WINVER=0x0A00 _WIN32_WINNT=0x0A00 NTDDI_VERSION=0x0A000000)
 target_compile_options(minihud_ui_check PRIVATE /utf-8)
-target_link_libraries(minihud_ui_check PRIVATE imgui shell32 advapi32 pdh iphlpapi)
+target_link_libraries(minihud_ui_check PRIVATE imgui shell32 advapi32 pdh iphlpapi winhttp bcrypt)
 
 add_executable(minihud_startup_check EXCLUDE_FROM_ALL tools/startup_check.cpp src/startup_task.cpp)
 target_include_directories(minihud_startup_check PRIVATE src)

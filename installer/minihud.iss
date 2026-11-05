@@ -8,7 +8,7 @@
 
 #define MyAppName "MiniHUD"
 #ifndef AppVersion
-  #define AppVersion "0.1.3"
+  #define AppVersion "1.0.0"
 #endif
 #ifndef BuildDir
   #define BuildDir "..\build\vs2022-final\Release"

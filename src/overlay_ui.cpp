@@ -359,12 +359,15 @@ UiAction DrawSettings(Config& cfg, const SensorSnapshot& snap, const std::vector
                 ImGui::TextWrapped("帧率目标：%s（PID %lu）",snap.foregroundProcess.c_str(),snap.foregroundPid);
                 ImGui::TextWrapped("帧率：%s",StatusText(snap.fpsStatus).c_str());
                 ImGui::TextWrapped("CPU：%s",StatusText(snap.cpuStatus).c_str());
-                if (state.pawnioInstalling) ImGui::TextUnformatted("正在安装 PawnIO...");
+                if (state.pawnioInstalling) ImGui::TextUnformatted("正在下载并安装 PawnIO...");
                 else if (snap.cpuNeedsDriver) {
-                    if (PawnIOSetupBundled()) {
-                        if (ImGui::Button("安装 PawnIO 驱动")) action=UiAction::InstallPawnIO;
-                    } else {
-                        if (ImGui::Button("下载 PawnIO 驱动")) action=UiAction::OpenPawnIODownload;
+                    if (ImGui::Button("安装 PawnIO 驱动")) action=UiAction::InstallPawnIO;
+                    ImGui::SetItemTooltip(PawnIOSetupBundled()
+                        ? "使用内置的官方安装器，需要管理员权限。"
+                        : "从官方地址下载安装器（约 3.4 MB），校验 SHA-256 后以管理员权限安装。");
+                    if (!PawnIOSetupBundled()) {
+                        ImGui::SameLine();
+                        if (ImGui::Button("手动下载")) action=UiAction::OpenPawnIODownload;
                         ImGui::SetItemTooltip("在浏览器中打开官方下载页。安装完成后关闭并重新打开设置即可重新检测。");
                     }
                 }

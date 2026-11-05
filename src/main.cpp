@@ -243,29 +243,31 @@ void CloseSettings(App& app) {
     app.dirty = true;
 }
 
-// Runs the bundled PawnIO installer off the UI thread; the result arrives as WM_APP_PAWNIO_DONE.
+// Runs the PawnIO install off the UI thread; the result arrives as WM_APP_PAWNIO_DONE.
+// Bundled builds extract the embedded installer, release builds download the official one.
 void StartPawnIOInstall(App& app) {
     if (app.settings.pawnioInstalling) return;
     app.settings.pawnioInstalling = true;
     app.settings.pawnioMessage.clear();
     HWND hwnd = app.overlay.Hwnd();
-    std::thread([hwnd] {
+    const bool bundled = PawnIOSetupBundled();
+    std::thread([hwnd, bundled] {
         auto* error = new std::string;
-        bool ok = RunBundledPawnIOSetup(*error);
+        bool ok = bundled ? RunBundledPawnIOSetup(*error) : InstallPawnIOFromWeb(*error);
         if (!PostMessageW(hwnd, WM_APP_PAWNIO_DONE, ok, reinterpret_cast<LPARAM>(error))) delete error;
     }).detach();
 }
 
 void OfferPawnIOInstall(App& app) {
     if (!app.cfg.offerPawnIOInstall || !(app.cfg.showCpuTemp || app.cfg.showCpuPower) || PawnIOReady() ||
-        !PawnIOSetupBundled() || !CpuPawnIO::CpuSupported())
+        !CpuPawnIO::CpuSupported())
         return;
 
     std::string installed = InstalledPawnIOVersion();
     std::wstring text = installed.empty()
         ? L"读取 CPU 温度和功耗需要 PawnIO 驱动（来源：pawnio.eu）。\n\n"
         : L"已安装的 PawnIO 驱动版本过旧，无法读取 CPU 温度和功耗。\n\n";
-    text += L"现在安装吗？需要管理员权限。\n\n选择“否”跳过，可稍后从设置中安装。";
+    text += L"现在下载并安装吗？需要管理员权限和网络连接。\n\n选择“否”跳过，可稍后从设置中安装。";
     if (MessageBoxW(nullptr, text.c_str(), L"MiniHUD", MB_YESNO | MB_ICONQUESTION | MB_SETFOREGROUND) == IDYES) {
         StartPawnIOInstall(app);
     } else {
