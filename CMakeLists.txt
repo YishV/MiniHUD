@@ -123,6 +123,7 @@ endforeach()
 add_executable(fps_monitor WIN32
     src/main.cpp
     src/config.cpp
+    src/recorder.cpp
     src/startup_task.cpp
     src/overlay_window.cpp
     src/overlay_ui.cpp
@@ -191,3 +192,8 @@ target_link_options(minihud_startup_check PRIVATE "/MANIFESTUAC:level='asInvoker
 add_executable(minihud_frame_stats_check EXCLUDE_FROM_ALL tools/frame_stats_check.cpp)
 target_include_directories(minihud_frame_stats_check PRIVATE src)
 target_compile_options(minihud_frame_stats_check PRIVATE /utf-8)
+add_executable(minihud_recorder_check EXCLUDE_FROM_ALL tools/recorder_check.cpp src/recorder.cpp)
+target_include_directories(minihud_recorder_check PRIVATE src)
+target_compile_definitions(minihud_recorder_check PRIVATE WIN32_LEAN_AND_MEAN NOMINMAX UNICODE _UNICODE)
+target_compile_options(minihud_recorder_check PRIVATE /utf-8)
+target_link_libraries(minihud_recorder_check PRIVATE shell32 ole32)

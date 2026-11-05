@@ -11,6 +11,7 @@
 
 #include <algorithm>
 #include <chrono>
+#include <cmath>
 #include <memory>
 
 namespace {
@@ -141,7 +142,18 @@ void SensorHub::Run() {
     };
 
     while (!stop_) {
-        const uint32_t mask = metrics_;
+        if (const int command = recordCommand_.exchange(0)) {
+            if (command == 1) {
+                recorder_.Start();
+                nextSampleAt_ = 0.0;
+                recordMessage_.clear();
+            } else if (command == 2) {
+                recorder_.Stop();
+                recorder_.Save(recordMessage_);
+            }
+        }
+        uint32_t mask = metrics_;
+        if (recorder_.Active()) mask |= kMetricFps; // recording needs frames even if FPS is hidden
         const auto now = Clock::now();
         const auto interval = milliseconds(intervalMs_.load());
         const bool graph = (mask & kMetricFrameGraph) != 0;
@@ -240,7 +252,8 @@ void SensorHub::Run() {
             s.foregroundPid = target;
             s.foregroundProcess = name;
             s.targetIsTrackedGame = target == trackedPid;
-            if (graph) fps.GetFrameTimes(target, kGraphHistorySeconds, false, s.frameTimesMs, s.lastFrameQpc);
+            if (graph || recorder_.Active())
+                fps.GetFrameTimes(target, kGraphHistorySeconds, false, s.frameTimesMs, s.lastFrameQpc);
         }
         graphPid = graph && wantFps ? target : 0;
         s.fpsStatus = fps.Status();
@@ -324,6 +337,34 @@ void SensorHub::Run() {
         s.diskTemp = slow.diskTemp;
         s.diskName = slow.diskName;
         s.diskStatus = slow.diskStatus;
+
+        if (recorder_.Active()) {
+            if (!s.frameTimesMs.empty()) recorder_.AddFrameTimes(s.frameTimesMs, s.lastFrameQpc);
+            const double elapsed = recorder_.Seconds();
+            if (elapsed >= nextSampleAt_) {
+                RecordSample sample;
+                sample.elapsed = std::floor(elapsed);
+                sample.fps = s.fps;
+                sample.frameTimeMs = s.frameTimeMs;
+                sample.low1 = s.fpsLow1;
+                sample.low01 = s.fpsLow01;
+                sample.cpuUsage = s.cpuUsage;
+                sample.cpuTemp = s.cpuTemp;
+                sample.cpuPowerW = s.cpuPowerW;
+                sample.gpuUsage = s.gpuUsage;
+                sample.gpuTemp = s.gpuTemp;
+                sample.gpuPowerW = s.gpuPowerW;
+                sample.vramUsedGB = s.vramUsedGB;
+                sample.vramTotalGB = s.vramTotalGB;
+                sample.ramUsedGB = s.ramUsedGB;
+                recorder_.AddSample(sample);
+                nextSampleAt_ = sample.elapsed + 1.0;
+            }
+        }
+        s.recording = recorder_.Active();
+        s.recordSeconds = recorder_.Seconds();
+        s.recordSamples = recorder_.Samples();
+        s.recordMessage = recordMessage_;
 
         {
             std::lock_guard lock(mutex_);

@@ -11,6 +11,7 @@
 
 #include <windows.h>
 #include <shellapi.h>
+#include <shlobj.h>
 
 #include <algorithm>
 #include <cmath>
@@ -277,6 +278,16 @@ void OfferPawnIOInstall(App& app) {
     }
 }
 
+void OpenRecordsFolder() {
+    PWSTR roaming = nullptr;
+    if (FAILED(SHGetKnownFolderPath(FOLDERID_RoamingAppData, KF_FLAG_CREATE, nullptr, &roaming)) || !roaming) return;
+    std::wstring directory(roaming);
+    CoTaskMemFree(roaming);
+    directory += L"\\MiniHUD\\records";
+    SHCreateDirectoryExW(nullptr, directory.c_str(), nullptr);
+    ShellExecuteW(nullptr, L"open", directory.c_str(), nullptr, nullptr, SW_SHOWNORMAL);
+}
+
 void Quit(App& app) {
     app.running = false;
     PostQuitMessage(0);
@@ -402,6 +413,9 @@ void RenderFrame(App& app) {
             ? "已打开 PawnIO 官方下载页。安装完成后关闭并重新打开设置即可重新检测。"
             : "无法打开浏览器，请手动访问 github.com/namazso/PawnIO.Setup/releases";
     }
+    else if (action == UiAction::StartRecording) app.sensors.StartRecording();
+    else if (action == UiAction::StopRecording) app.sensors.StopRecording();
+    else if (action == UiAction::OpenRecords) OpenRecordsFolder();
     else if (action == UiAction::EnableStartup || action == UiAction::DisableStartup) {
         std::string error;
         const bool enable=action==UiAction::EnableStartup;

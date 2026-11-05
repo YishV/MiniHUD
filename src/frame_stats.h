@@ -1,6 +1,7 @@
 #pragma once
 
 #include <algorithm>
+#include <cmath>
 #include <cstddef>
 #include <vector>
 
@@ -36,9 +37,18 @@ inline FrameStats ComputeFrameStats(std::vector<float> frameMs) {
     stats.p50Ms = at(0.50);
     stats.p95Ms = at(0.95);
     stats.p99Ms = at(0.99);
-    stats.low1Fps = stats.p99Ms > 0.0f ? 1000.0f / stats.p99Ms : 0.0f;
-    const float p999 = at(0.999);
-    stats.low01Fps = p999 > 0.0f ? 1000.0f / p999 : 0.0f;
+    // 1% low = average FPS of the slowest 1% of frames (the usual reviewer definition). Unlike a
+    // plain percentile it cannot land on a fast frame when fewer than 1% of frames are slow.
+    auto lowAverageFps = [&](double fraction) {
+        const size_t count = std::max<size_t>(1, size_t(std::ceil(fraction * double(frameMs.size()))));
+        const size_t first = frameMs.size() - count;
+        double sum = 0.0;
+        for (size_t i = first; i < frameMs.size(); ++i) sum += frameMs[i];
+        const double average = sum / double(count);
+        return average > 0.0 ? float(1000.0 / average) : 0.0f;
+    };
+    stats.low1Fps = lowAverageFps(0.01);
+    stats.low01Fps = lowAverageFps(0.001);
 
     const float stutterLimit = std::max(33.3f, 2.0f * stats.p50Ms);
     for (float ms : frameMs)

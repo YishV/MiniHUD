@@ -11,6 +11,8 @@
 #include <thread>
 #include <vector>
 
+#include "recorder.h"
+
 constexpr float kFrameGraphSeconds = 5.0f; // time span of the frame time graph
 constexpr float kLowFpsWindowSeconds = 60.0f; // 1% / 0.1% low window
 constexpr float kStutterWindowSeconds = 1.0f; // a stutter is a frame over twice the average of this long before it
@@ -53,6 +55,12 @@ struct SensorSnapshot {
     std::string gpuStatus;
     std::string diskName;
     std::string diskStatus;
+
+    // Performance recording state, shown in the settings panel.
+    bool recording = false;
+    double recordSeconds = 0.0;
+    int recordSamples = 0;
+    std::string recordMessage; // result of the last start/stop
 };
 
 // Metrics currently shown on the overlay. Hidden metrics are not polled at all.
@@ -92,6 +100,9 @@ public:
     void SetTrackGame(bool enabled) { trackGame_ = enabled; }
     // Re-open the PawnIO driver on the next poll (after it was installed).
     void ReinitPawnIO() { reinitPawnIO_ = true; }
+    // Start/stop a performance recording; stopped recordings are written to %APPDATA%\MiniHUD\records.
+    void StartRecording() { recordCommand_ = 1; }
+    void StopRecording() { recordCommand_ = 2; }
 
     SensorSnapshot Snapshot();
 
@@ -106,6 +117,7 @@ private:
     std::atomic<bool> reinitPawnIO_{false};
     std::atomic<bool> trackGame_{false};
     std::atomic<uint32_t> metrics_{0};
+    std::atomic<int> recordCommand_{0}; // 1 = start, 2 = stop
     std::thread thread_;
     std::mutex wakeMutex_;
     std::condition_variable wake_;
@@ -113,4 +125,9 @@ private:
 
     std::mutex mutex_;
     SensorSnapshot snapshot_;
+
+    // Sensor thread only (commands arrive through recordCommand_).
+    PerformanceRecorder recorder_;
+    double nextSampleAt_ = 0.0;
+    std::string recordMessage_;
 };

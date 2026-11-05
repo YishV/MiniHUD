@@ -349,6 +349,21 @@ UiAction DrawSettings(Config& cfg, const SensorSnapshot& snap, const std::vector
                 if (ImGui::Button("恢复默认阈值")) cfg.alertLimits=kDefaultLimits;
                 ImGui::EndChild(); ImGui::EndTabItem();
             }
+            if (ImGui::BeginTabItem("性能记录")) {
+                ImGui::BeginChild("##record", ImVec2(0,-45));
+                ImGui::TextWrapped("记录游戏过程中的帧率和温度。停止后会生成每秒明细 CSV 和一份可读报告，保存在 %%APPDATA%%\\MiniHUD\\records。");
+                if (snap.recording) {
+                    ImGui::Text("正在记录：%d 分 %02d 秒，样本 %d 个", int(snap.recordSeconds)/60, int(snap.recordSeconds)%60, snap.recordSamples);
+                    if (ImGui::Button("停止并生成报告")) action=UiAction::StopRecording;
+                } else {
+                    if (ImGui::Button("开始记录")) action=UiAction::StartRecording;
+                    ImGui::SameLine();
+                    if (ImGui::Button("打开记录目录")) action=UiAction::OpenRecords;
+                }
+                if (!snap.recordMessage.empty()) ImGui::TextWrapped("%s", snap.recordMessage.c_str());
+                ImGui::TextWrapped("提示：记录期间让游戏保持在前台；1% low 至少要 1 分钟数据才稳定。记录只保存在本机，不会上传。");
+                ImGui::EndChild(); ImGui::EndTabItem();
+            }
             if (ImGui::BeginTabItem("电脑配置")) {
                 ImGui::BeginChild("##computer",ImVec2(0,-45));
                 MEMORYSTATUSEX memory{sizeof(memory)}; GlobalMemoryStatusEx(&memory);
