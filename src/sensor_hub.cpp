@@ -1,5 +1,7 @@
 #include "sensor_hub.h"
 
+#include "diag.h"
+
 #include "sensors/cpu_pawnio.h"
 #include "sensors/cpu_usage.h"
 #include "sensors/fps_etw.h"
@@ -8,6 +10,7 @@
 #include "sensors/gpu_d3dkmt.h"
 #include "sensors/gpu_nvml.h"
 #include "sensors/system_io.h"
+#include "util.h"
 
 #include <algorithm>
 #include <chrono>
@@ -44,6 +47,18 @@ DWORD WindowProcessId(HWND hwnd) {
     DWORD pid = 0;
     GetWindowThreadProcessId(hwnd, &pid);
     return pid;
+}
+
+// A REG_SZ from HKLM, converted to UTF-8; empty when the value does not exist.
+std::string FirmwareString(const wchar_t* name) {
+    wchar_t buffer[512] = {};
+    DWORD size = sizeof(buffer);
+    if (RegGetValueW(HKEY_LOCAL_MACHINE, L"HARDWARE\\DESCRIPTION\\System\\BIOS", name, RRF_RT_REG_SZ, nullptr, buffer,
+                     &size) != ERROR_SUCCESS)
+        return {};
+    char out[768] = {};
+    WideCharToMultiByte(CP_UTF8, 0, buffer, -1, out, sizeof(out), nullptr, nullptr);
+    return Trim(out);
 }
 
 } // namespace
@@ -103,6 +118,13 @@ void SensorHub::Run() {
     CpuUsage cpuUsage;
     auto cpu = std::make_unique<CpuPawnIO>(); // CPU temperature + package power
     const std::string cpuName = CpuPawnIO::CpuName();
+    const std::string systemVendor = FirmwareString(L"SystemManufacturer");
+    const std::string systemModel = FirmwareString(L"SystemProductName");
+    const std::string baseboardVendor = FirmwareString(L"BaseBoardManufacturer");
+    const std::string baseboardProduct = FirmwareString(L"BaseBoardProduct");
+    const std::string biosVendor = FirmwareString(L"BIOSVendor");
+    const std::string biosVersion = FirmwareString(L"BIOSVersion");
+    const std::string biosDate = FirmwareString(L"BIOSReleaseDate");
     std::string gpuStatus;
     const std::unique_ptr<GpuSource> gpu = OpenGpu(gpuStatus);
     DiskSpeed diskSpeed;
@@ -147,9 +169,13 @@ void SensorHub::Run() {
                 recorder_.Start();
                 nextSampleAt_ = 0.0;
                 recordMessage_.clear();
+                DiagLog("recording started");
             } else if (command == 2) {
                 recorder_.Stop();
-                recorder_.Save(recordMessage_);
+                if (recorder_.Save(recordMessage_))
+                    DiagLog("recording saved");
+                else
+                    DiagLog("recording failed: " + recordMessage_);
             }
         }
         uint32_t mask = metrics_;
@@ -277,6 +303,13 @@ void SensorHub::Run() {
             }
         }
         s.cpuName = cpuName;
+        s.systemVendor = systemVendor;
+        s.systemModel = systemModel;
+        s.baseboardVendor = baseboardVendor;
+        s.baseboardProduct = baseboardProduct;
+        s.biosVendor = biosVendor;
+        s.biosVersion = biosVersion;
+        s.biosDate = biosDate;
         s.cpuStatus = cpu->Status();
         s.cpuNeedsDriver = cpu->NeedsDriver();
 

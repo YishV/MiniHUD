@@ -12,13 +12,14 @@
 #include <vector>
 
 enum class UiAction { None, CloseSettings, ExitApp, InstallPawnIO, OpenPawnIODownload, EnableStartup, DisableStartup,
-                      StartRecording, StopRecording, OpenRecords };
+                      StartRecording, StopRecording, OpenRecords, ExportDiagnostics };
 
 struct SettingsState {
     bool open = false;
     char hotkeyBuf[64] = {};
     bool pawnioInstalling = false;
     std::string pawnioMessage; // result of the last install attempt
+    std::string diagMessage;   // result of the last diagnostics export
     bool diskInfoLoaded = false;
     DiskReading diskInfo;
     StartupState startup;

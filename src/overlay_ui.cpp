@@ -368,6 +368,12 @@ UiAction DrawSettings(Config& cfg, const SensorSnapshot& snap, const std::vector
                 ImGui::BeginChild("##computer",ImVec2(0,-45));
                 MEMORYSTATUSEX memory{sizeof(memory)}; GlobalMemoryStatusEx(&memory);
                 ImGui::TextWrapped("处理器：%s",snap.cpuName.c_str());
+                if (!snap.systemVendor.empty() || !snap.systemModel.empty())
+                    ImGui::TextWrapped("制造商 / 型号：%s %s",snap.systemVendor.c_str(),snap.systemModel.c_str());
+                if (!snap.baseboardVendor.empty() || !snap.baseboardProduct.empty())
+                    ImGui::TextWrapped("主板：%s %s",snap.baseboardVendor.c_str(),snap.baseboardProduct.c_str());
+                if (!snap.biosVendor.empty() || !snap.biosVersion.empty())
+                    ImGui::TextWrapped("BIOS：%s %s（%s）",snap.biosVendor.c_str(),snap.biosVersion.c_str(),snap.biosDate.c_str());
                 ImGui::TextWrapped("显卡：%s",snap.gpuName.c_str());
                 ImGui::Text("物理内存：%.1f GB",memory.ullTotalPhys/(1024.0*1024*1024));
                 if (snap.vramTotalGB) ImGui::Text("显存容量：%.1f GB",*snap.vramTotalGB);
@@ -398,6 +404,10 @@ UiAction DrawSettings(Config& cfg, const SensorSnapshot& snap, const std::vector
                 if (!state.pawnioMessage.empty()) ImGui::TextWrapped("%s",state.pawnioMessage.c_str());
                 ImGui::TextWrapped("GPU：%s",StatusText(snap.gpuStatus).c_str());
                 ImGui::TextWrapped("SSD：%s",StatusText(state.diskInfo.status).c_str());
+                ImGui::SeparatorText("诊断");
+                if (ImGui::Button("导出诊断信息")) action=UiAction::ExportDiagnostics;
+                ImGui::SetItemTooltip("把版本、硬件、传感器状态和最近日志写入 %APPDATA%\\MiniHUD\\diagnostics。");
+                if (!state.diagMessage.empty()) ImGui::TextWrapped("%s",state.diagMessage.c_str());
                 ImGui::EndChild(); ImGui::EndTabItem();
             }
             ImGui::EndTabBar();

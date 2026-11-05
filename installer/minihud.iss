@@ -1,4 +1,4 @@
-; MiniHUD installer (Inno Setup 6).
+﻿; MiniHUD installer (Inno Setup 6).
 ;
 ; Build the app first, then:
 ;   ISCC.exe installer\minihud.iss /DBuildDir=..\build\vs2022-final\Release /DAppVersion=0.1.3
@@ -8,7 +8,7 @@
 
 #define MyAppName "MiniHUD"
 #ifndef AppVersion
-  #define AppVersion "1.0.0"
+  #define AppVersion "1.1.0"
 #endif
 #ifndef BuildDir
   #define BuildDir "..\build\vs2022-final\Release"

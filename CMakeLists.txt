@@ -124,6 +124,7 @@ add_executable(fps_monitor WIN32
     src/main.cpp
     src/config.cpp
     src/recorder.cpp
+    src/diag.cpp
     src/startup_task.cpp
     src/overlay_window.cpp
     src/overlay_ui.cpp
@@ -197,3 +198,8 @@ target_include_directories(minihud_recorder_check PRIVATE src)
 target_compile_definitions(minihud_recorder_check PRIVATE WIN32_LEAN_AND_MEAN NOMINMAX UNICODE _UNICODE)
 target_compile_options(minihud_recorder_check PRIVATE /utf-8)
 target_link_libraries(minihud_recorder_check PRIVATE shell32 ole32)
+add_executable(minihud_diag_check EXCLUDE_FROM_ALL tools/diag_check.cpp src/diag.cpp)
+target_include_directories(minihud_diag_check PRIVATE src)
+target_compile_definitions(minihud_diag_check PRIVATE WIN32_LEAN_AND_MEAN NOMINMAX UNICODE _UNICODE)
+target_compile_options(minihud_diag_check PRIVATE /utf-8)
+target_link_libraries(minihud_diag_check PRIVATE shell32 ole32)

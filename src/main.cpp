@@ -2,6 +2,7 @@
 // usage/temperature without injecting anything into games.
 
 #include "config.h"
+#include "diag.h"
 #include "overlay_ui.h"
 #include "overlay_window.h"
 #include "pawnio_setup.h"
@@ -18,6 +19,7 @@
 #include <cstdio>
 #include <cwchar>
 #include <memory>
+#include <sstream>
 #include <thread>
 #include <vector>
 
@@ -52,6 +54,7 @@ struct App {
     ImVec2 statsSize = ImVec2(0, 0); // stats panel size from the last frame
     HWND previousForeground = nullptr;
     bool hotkeyRegistered = false;
+    bool firstSnapshotLogged = false;
     bool hudVisible = true; // manual visibility; hotkey and tray work even while hidden
     bool trayIconAdded = false;
     bool dirty = true;
@@ -214,6 +217,46 @@ void ApplyConfig(App& app, bool force) {
 
 void RenderFrame(App& app);
 
+std::string Narrow(const std::wstring& text) {
+    char out[1024];
+    const int n = WideCharToMultiByte(CP_UTF8, 0, text.c_str(), -1, out, sizeof(out), nullptr, nullptr);
+    return n > 1 ? std::string(out, size_t(n - 1)) : std::string();
+}
+
+std::string OsVersionText() {
+    OSVERSIONINFOW version{sizeof(version)};
+    if (HMODULE ntdll = GetModuleHandleW(L"ntdll.dll")) {
+        using VersionFn = LONG(WINAPI*)(OSVERSIONINFOW*);
+        if (auto fn = reinterpret_cast<VersionFn>(GetProcAddress(ntdll, "RtlGetVersion"))) fn(&version);
+    }
+    return std::to_string(version.dwMajorVersion) + "." + std::to_string(version.dwMinorVersion) + " build " +
+           std::to_string(version.dwBuildNumber);
+}
+
+// Writes version, hardware, sensor states and the log tail next to the log file.
+void ExportDiagnostics(App& app) {
+    const SensorSnapshot& s = app.snapshot;
+    std::ostringstream body;
+    body << "MiniHUD " << kAppVersion << " 诊断信息\r\n";
+    body << "Windows: " << OsVersionText() << "\r\n";
+    body << "制造商/型号: " << s.systemVendor << " " << s.systemModel << "\r\n";
+    body << "主板: " << s.baseboardVendor << " " << s.baseboardProduct << "\r\n";
+    body << "BIOS: " << s.biosVendor << " " << s.biosVersion << " " << s.biosDate << "\r\n";
+    body << "CPU: " << s.cpuName << "\r\n";
+    body << "GPU: " << s.gpuName << "\r\n";
+    body << "配置文件: " << Narrow(app.configPath) << "\r\n";
+    body << "\r\n传感器状态:\r\n";
+    body << "  FPS: " << s.fpsStatus << "\r\n";
+    body << "  CPU: " << s.cpuStatus << (s.cpuNeedsDriver ? " (驱动缺失)" : "") << "\r\n";
+    body << "  GPU: " << s.gpuStatus << "\r\n";
+    body << "  SSD: " << s.diskStatus << "\r\n";
+    body << "\r\n最近日志:\r\n" << ReadLogTail(20000);
+    std::wstring path;
+    const bool ok = WriteDiagnostics(body.str(), path);
+    app.settings.diagMessage = ok ? "已导出诊断：" + Narrow(path) : "导出诊断失败";
+    DiagLog(ok ? "diagnostics exported: " + Narrow(path) : "diagnostics export failed");
+}
+
 void OpenSettings(App& app) {
     if (app.settings.open) return;
     app.settings.startup=QueryStartup();
@@ -252,6 +295,8 @@ void StartPawnIOInstall(App& app) {
     app.settings.pawnioMessage.clear();
     HWND hwnd = app.overlay.Hwnd();
     const bool bundled = PawnIOSetupBundled();
+    DiagLog(std::string("PawnIO install started (bundled=") + (bundled ? "yes" : "no") + ", version " +
+            InstalledPawnIOVersion() + ")");
     std::thread([hwnd, bundled] {
         auto* error = new std::string;
         bool ok = bundled ? RunBundledPawnIOSetup(*error) : InstallPawnIOFromWeb(*error);
@@ -356,7 +401,13 @@ std::optional<LRESULT> OverlayMessage(App& app, HWND, UINT msg, WPARAM wp, LPARA
     case WM_APP_SENSORS:
         app.snapshot = app.sensors.Snapshot();
         if (wp != kSnapshotGraphOnly) app.dirty = true; // new graph data is drawn on the graph timer
-
+        if (!app.firstSnapshotLogged) {
+            app.firstSnapshotLogged = true;
+            DiagLog("fps: " + app.snapshot.fpsStatus);
+            DiagLog("cpu: " + app.snapshot.cpuStatus);
+            DiagLog("gpu: " + app.snapshot.gpuStatus);
+            DiagLog("disk: " + app.snapshot.diskStatus);
+        }
         return 0;
     case WM_TIMER:
         app.overlay.ReassertTopmost();
@@ -372,6 +423,7 @@ std::optional<LRESULT> OverlayMessage(App& app, HWND, UINT msg, WPARAM wp, LPARA
         std::unique_ptr<std::string> error(reinterpret_cast<std::string*>(lp));
         app.settings.pawnioInstalling = false;
         app.settings.pawnioMessage = wp ? "PawnIO 安装完成，正在重新连接温度传感器。" : "PawnIO 安装失败：" + *error;
+        DiagLog(std::string("PawnIO install ") + (wp ? "succeeded" : "failed: " + *error));
         app.sensors.ReinitPawnIO();
         app.dirty = true;
         return 0;
@@ -416,6 +468,7 @@ void RenderFrame(App& app) {
     else if (action == UiAction::StartRecording) app.sensors.StartRecording();
     else if (action == UiAction::StopRecording) app.sensors.StopRecording();
     else if (action == UiAction::OpenRecords) OpenRecordsFolder();
+    else if (action == UiAction::ExportDiagnostics) ExportDiagnostics(app);
     else if (action == UiAction::EnableStartup || action == UiAction::DisableStartup) {
         std::string error;
         const bool enable=action==UiAction::EnableStartup;
@@ -480,6 +533,8 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int) {
     g_app = &app;
     app.configPath = DefaultConfigPath();
     LoadConfigOrMigrate(app.configPath, app.cfg);
+    DiagLog(std::string("MiniHUD ") + kAppVersion + " starting; Windows " + OsVersionText());
+    DiagLog("config: " + Narrow(app.configPath));
     if (!app.cfg.startupDefaultApplied) {
         std::string error;
         if (SetStartup(true,error)) {

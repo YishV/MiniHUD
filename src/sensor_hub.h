@@ -55,6 +55,14 @@ struct SensorSnapshot {
     std::string gpuStatus;
     std::string diskName;
     std::string diskStatus;
+    // Machine identity, read once from the firmware tables Windows mirrors into the registry.
+    std::string systemVendor;
+    std::string systemModel;
+    std::string baseboardVendor;
+    std::string baseboardProduct;
+    std::string biosVendor;
+    std::string biosVersion;
+    std::string biosDate;
 
     // Performance recording state, shown in the settings panel.
     bool recording = false;
