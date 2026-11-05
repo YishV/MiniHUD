@@ -151,7 +151,7 @@ ImVec2 CornerPivot(Corner c) {
 }
 
 namespace {
-struct HudItem { std::string label, text; ImVec4 color; };
+struct HudItem { int id; std::string label, text; ImVec4 color; };
 const char* const metricLabels[] = {"帧率", "帧时间", "CPU 占用", "CPU 温度", "GPU 占用", "GPU 温度",
     "CPU 功耗", "GPU 功耗", "显存", "内存", "SSD 温度", "磁盘读取", "磁盘写入", "下载", "上传",
     "1% 低帧", "0.1% 低帧"};
@@ -181,7 +181,7 @@ ImVec2 DrawStats(const Config& cfg, const SensorSnapshot& snap, ImVec2 pos, ImVe
         char text[80];
         if (value) std::snprintf(text, sizeof(text), format, *value);
         else std::snprintf(text, sizeof(text), "--");
-        items.push_back({cfg.englishMetrics ? englishLabels[index] : metricLabels[index], text,
+        items.push_back({static_cast<int>(index), cfg.englishMetrics ? englishLabels[index] : metricLabels[index], text,
             !value ? kMissingColor : MetricAlert(cfg.alertsEnabled, metric, *value, cfg.alertLimits[index]) ? kHotColor : kValueColor});
     };
     auto temp = [&](Metric metric, const std::optional<float>& value) {
@@ -201,10 +201,8 @@ ImVec2 DrawStats(const Config& cfg, const SensorSnapshot& snap, ImVec2 pos, ImVe
     };
     if (cfg.showFps) add(Metric::Fps, snap.fps, "%.0f");
     if (cfg.showFrameTime) add(Metric::FrameTime, snap.frameTimeMs, "%.1f ms");
-    if (cfg.showLowFps) {
-        add(Metric::FpsLow1, snap.fpsLow1, "%.0f");
-        add(Metric::FpsLow01, snap.fpsLow01, "%.0f");
-    }
+    if (cfg.showLowFps) add(Metric::FpsLow1, snap.fpsLow1, "%.0f");
+    if (cfg.showLow01Fps) add(Metric::FpsLow01, snap.fpsLow01, "%.0f");
     if (cfg.showCpuUsage) add(Metric::CpuUsage, snap.cpuUsage, "%.0f%%");
     if (cfg.showCpuTemp) temp(Metric::CpuTemp, snap.cpuTemp);
     if (cfg.showGpuUsage) add(Metric::GpuUsage, snap.gpuUsage, "%.0f%%");
@@ -222,7 +220,10 @@ ImVec2 DrawStats(const Config& cfg, const SensorSnapshot& snap, ImVec2 pos, ImVe
         add(Metric::NetDown, snap.networkDownMBps, "%.1f MB/s");
         add(Metric::NetUp, snap.networkUpMBps, "%.1f MB/s");
     }
-    if (items.empty() && !cfg.showFrameGraph) return {};
+    if (items.empty() && !cfg.showFrameGraph && !snap.recording) return {};
+    std::array<int,kMetricCount> rank{};
+    for (size_t i=0;i<kMetricCount;++i) rank[cfg.metricOrder[i]]=static_cast<int>(i);
+    std::sort(items.begin(),items.end(),[&](const auto& a,const auto& b){ return rank[a.id]<rank[b.id]; });
     const float fontSize = ImGui::GetStyle().FontSizeBase * cfg.fontScale;
     ImGui::PushFont(nullptr, fontSize);
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(9, 5));
@@ -235,7 +236,11 @@ ImVec2 DrawStats(const Config& cfg, const SensorSnapshot& snap, ImVec2 pos, ImVe
         ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoInputs | ImGuiWindowFlags_NoFocusOnAppearing;
     if (ImGui::Begin("##stats", nullptr, flags)) {
         const ImVec2 start = ImGui::GetCursorPos();
-        float x = 0, width = 0;
+        float x = snap.recording ? 12.0f : 0.0f, width = 0;
+        if (snap.recording) {
+            const auto screen=ImGui::GetCursorScreenPos();
+            ImGui::GetWindowDrawList()->AddCircleFilled(ImVec2(screen.x+4,screen.y+ImGui::GetTextLineHeight()/2),3,IM_COL32(255,70,70,255));
+        }
         int row = 0, col = 0;
         const float height = ImGui::GetTextLineHeight() + cfg.rowGap;
         const float available = std::max(100.0f, ImGui::GetIO().DisplaySize.x - 18.0f);
@@ -253,7 +258,7 @@ ImVec2 DrawStats(const Config& cfg, const SensorSnapshot& snap, ImVec2 pos, ImVe
         }
         width = std::max(width, x > 0 ? x - cfg.moduleGap : 180);
         ImGui::SetCursorPos(start);
-        ImGui::Dummy(ImVec2(width, items.empty() ? 0 : (row + 1) * height - cfg.rowGap));
+        ImGui::Dummy(ImVec2(width, items.empty() && !snap.recording ? 0 : (row + 1) * height - cfg.rowGap));
         if (cfg.showFrameGraph) DrawFrameGraph(snap, width);
         size = ImGui::GetWindowSize();
     }
@@ -277,7 +282,8 @@ UiAction DrawSettings(Config& cfg, const SensorSnapshot& snap, const std::vector
                     &cfg.showCpuPower,&cfg.showGpuPower,&cfg.showVram,&cfg.showRam,&cfg.showDiskTemp};
                 if (ImGui::BeginTable("##metrics", 2)) {
                     for (size_t i=0;i<std::size(toggles);++i) { ImGui::TableNextColumn(); ImGui::Checkbox(metricLabels[i],toggles[i]); }
-                    ImGui::TableNextColumn(); ImGui::Checkbox("1% / 0.1% 低帧", &cfg.showLowFps);
+                    ImGui::TableNextColumn(); ImGui::Checkbox("1% 低帧", &cfg.showLowFps);
+                    ImGui::TableNextColumn(); ImGui::Checkbox("0.1% 低帧", &cfg.showLow01Fps);
                     ImGui::SetItemTooltip("最近 60 秒里最慢的 1% 和 0.1% 帧对应的帧率，越低说明卡顿越重。");
                     ImGui::TableNextColumn(); ImGui::Checkbox("磁盘读写速度", &cfg.showDiskSpeed);
                     ImGui::TableNextColumn(); ImGui::Checkbox("网络上传 / 下载", &cfg.showNetworkSpeed);
@@ -294,6 +300,30 @@ UiAction DrawSettings(Config& cfg, const SensorSnapshot& snap, const std::vector
                 if (!cfg.singleLine) ImGui::SliderInt("每行指标数量", &cfg.itemsPerRow, 1, 8);
                 ImGui::SliderFloat("指标水平间距", &cfg.moduleGap, 0, 80, "%.0f px");
                 if (!cfg.singleLine) ImGui::SliderFloat("指标行间距", &cfg.rowGap, 0, 40, "%.0f px");
+                if (ImGui::TreeNode("拖动调整指标顺序")) {
+                    int source=-1,target=-1;
+                    ImGui::TextWrapped("拖动下方指标到目标位置；关闭的指标也会保留排序。");
+                    ImGui::BeginChild("##metric-order",ImVec2(0,150),ImGuiChildFlags_Borders);
+                    for (int id:cfg.metricOrder) {
+                        ImGui::PushID(id);
+                        ImGui::Selectable(metricLabels[id]);
+                        if (ImGui::BeginDragDropSource()) {
+                            ImGui::SetDragDropPayload("MINIHUD_METRIC",&id,sizeof(id));
+                            ImGui::TextUnformatted(metricLabels[id]); ImGui::EndDragDropSource();
+                        }
+                        if (ImGui::BeginDragDropTarget()) {
+                            if (const auto* payload=ImGui::AcceptDragDropPayload("MINIHUD_METRIC")) {
+                                if (payload->DataSize==sizeof(int)) { source=*static_cast<const int*>(payload->Data); target=id; }
+                            }
+                            ImGui::EndDragDropTarget();
+                        }
+                        ImGui::PopID();
+                    }
+                    ImGui::EndChild();
+                    if (source>=0) MoveMetric(cfg.metricOrder,source,target);
+                    if (ImGui::Button("恢复指标顺序")) cfg.metricOrder=kDefaultMetricOrder;
+                    ImGui::TreePop();
+                }
                 const char* corners[] = {"左上角","右上角","左下角","右下角"};
                 int corner = static_cast<int>(cfg.corner);
                 if (ImGui::Combo("屏幕位置", &corner, corners, 4)) cfg.corner = static_cast<Corner>(corner);
@@ -326,6 +356,12 @@ UiAction DrawSettings(Config& cfg, const SensorSnapshot& snap, const std::vector
                 ImGui::SetItemTooltip("快捷键同时控制黑条和托盘图标显隐。隐藏时再次运行程序，也能打开设置。");
                 if (ParseHotkey(state.hotkeyBuf,mods,vk)) cfg.hotkey=state.hotkeyBuf;
                 else ImGui::TextColored(kHotColor,"快捷键格式无效，例如 Ctrl+Shift+F12");
+                ImGui::InputText("开始 / 停止录制快捷键",state.recordHotkeyBuf,sizeof(state.recordHotkeyBuf));
+                UINT recordMods=0,recordVk=0;
+                if (ParseHotkey(state.recordHotkeyBuf,recordMods,recordVk) && (recordMods!=mods || recordVk!=vk))
+                    cfg.recordHotkey=state.recordHotkeyBuf;
+                else ImGui::TextColored(kHotColor,"录制快捷键须有效，且不能与显隐快捷键相同。");
+                if (!state.recordHotkeyRegistered) ImGui::TextWrapped("录制快捷键未能注册，可能被占用；请更换快捷键并保存。");
                 ImGui::Checkbox("切换应用后继续跟踪游戏帧率",&cfg.trackGame);
                 ImGui::BeginDisabled(!cfg.trackGame); ImGui::Checkbox("仅在检测到游戏时显示",&cfg.onlyWithGame); ImGui::EndDisabled();
                 ImGui::BeginDisabled(!cfg.onlyWithGame); ImGui::Checkbox("仅在游戏获得焦点时显示",&cfg.onlyWhenFocused); ImGui::EndDisabled();
@@ -352,6 +388,8 @@ UiAction DrawSettings(Config& cfg, const SensorSnapshot& snap, const std::vector
             if (ImGui::BeginTabItem("性能记录")) {
                 ImGui::BeginChild("##record", ImVec2(0,-45));
                 ImGui::TextWrapped("记录游戏过程中的帧率和温度。停止后会生成每秒明细 CSV 和一份可读报告，保存在 %%APPDATA%%\\MiniHUD\\records。");
+                ImGui::Text("录制快捷键：%s",cfg.recordHotkey.c_str());
+                ImGui::TextWrapped("黑条上的小红点表示正在录制。隐藏黑条不会停止录制；再次按录制快捷键停止。");
                 if (snap.recording) {
                     ImGui::Text("正在记录：%d 分 %02d 秒，样本 %d 个", int(snap.recordSeconds)/60, int(snap.recordSeconds)%60, snap.recordSamples);
                     if (ImGui::Button("停止并生成报告")) action=UiAction::StopRecording;
@@ -440,7 +478,7 @@ UiAction DrawSettings(Config& cfg, const SensorSnapshot& snap, const std::vector
         ImGui::Separator();
         if (ImGui::Button("保存并关闭")) action=UiAction::CloseSettings;
         ImGui::SameLine();
-        if (ImGui::Button("恢复全部默认设置")) { const bool startupApplied=cfg.startupDefaultApplied; cfg=Config{}; cfg.startupDefaultApplied=startupApplied; std::snprintf(state.hotkeyBuf,sizeof(state.hotkeyBuf),"%s",cfg.hotkey.c_str()); }
+        if (ImGui::Button("恢复全部默认设置")) { const bool startupApplied=cfg.startupDefaultApplied; cfg=Config{}; cfg.startupDefaultApplied=startupApplied; std::snprintf(state.hotkeyBuf,sizeof(state.hotkeyBuf),"%s",cfg.hotkey.c_str()); std::snprintf(state.recordHotkeyBuf,sizeof(state.recordHotkeyBuf),"%s",cfg.recordHotkey.c_str()); }
         ImGui::SameLine(); if (ImGui::Button("退出 MiniHUD")) action=UiAction::ExitApp;
     }
     ImGui::End();

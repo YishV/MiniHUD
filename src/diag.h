@@ -4,7 +4,7 @@
 #include <string>
 
 // App version shown in logs and diagnostics (the resource version is generated separately).
-inline constexpr const char* kAppVersion = "1.1.0";
+inline constexpr const char* kAppVersion = "1.0";
 
 // Appends "[yyyy-mm-dd hh:mm:ss] message" to %APPDATA%\MiniHUD\MiniHUD.log. Rotates to
 // MiniHUD.log.1 once the file passes ~512 KB. Safe to call from any thread.

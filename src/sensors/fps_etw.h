@@ -43,7 +43,7 @@ public:
 
     // How much present history to keep beyond the one second FPS needs (frame time graph,
     // 1% low window).
-    void SetHistorySeconds(double seconds) { historySeconds_ = seconds; }
+    void SetHistorySeconds(double seconds);
 
 private:
     struct ProcessFrames {

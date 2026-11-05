@@ -31,6 +31,7 @@ constexpr UINT WM_APP_OPEN_SETTINGS = WM_APP + 3;
 constexpr UINT WM_APP_PAWNIO_DONE = WM_APP + 4; // wParam = success, lParam = std::string* error
 constexpr UINT WM_APP_FOREGROUND = WM_APP + 5;
 constexpr int kHotkeyId = 1;
+constexpr int kRecordHotkeyId = 2;
 constexpr UINT_PTR kTopmostTimer = 1;
 constexpr UINT kTrayIconId = 1;
 enum : UINT { ID_TRAY_SETTINGS = 100, ID_TRAY_EXIT, ID_TRAY_TOGGLE };
@@ -54,6 +55,7 @@ struct App {
     ImVec2 statsSize = ImVec2(0, 0); // stats panel size from the last frame
     HWND previousForeground = nullptr;
     bool hotkeyRegistered = false;
+    bool recordHotkeyRegistered = false;
     bool firstSnapshotLogged = false;
     bool hudVisible = true; // manual visibility; hotkey and tray work even while hidden
     bool trayIconAdded = false;
@@ -98,6 +100,8 @@ void RemoveTrayIcon(App& app) {
 }
 
 void RegisterHudHotkey(App& app) {
+    if (app.recordHotkeyRegistered) UnregisterHotKey(app.trayWnd,kRecordHotkeyId);
+    app.recordHotkeyRegistered=false;
     if (app.hotkeyRegistered) UnregisterHotKey(app.trayWnd, kHotkeyId);
     app.hotkeyRegistered = false;
     UINT mods = 0, vk = 0;
@@ -107,6 +111,9 @@ void RegisterHudHotkey(App& app) {
         app.hudVisible=true;
         AddTrayIcon(app); // avoid an invisible app with no working way to summon it
     }
+    if (ParseHotkey(app.cfg.recordHotkey,mods,vk))
+        app.recordHotkeyRegistered=RegisterHotKey(app.trayWnd,kRecordHotkeyId,mods|MOD_NOREPEAT,vk)!=FALSE;
+    if (!app.recordHotkeyRegistered) DiagLog("recording hotkey registration failed");
 }
 
 RECT MonitorRect(App& app) {
@@ -173,7 +180,8 @@ void SetForegroundHook(App& app, bool enabled) {
 // The sensors to poll: only the metrics that are shown.
 uint32_t MetricMask(const Config& c) {
     uint32_t m = 0;
-    if (c.showFps || c.showFrameTime || c.showLowFps || c.onlyWithGame) m |= kMetricFps; // games are detected by their frames
+    if (c.showFps || c.showFrameTime || c.showLowFps || c.showLow01Fps || c.onlyWithGame) m |= kMetricFps;
+    if (c.showLowFps || c.showLow01Fps) m |= kMetricLowFps;
     if (c.showCpuUsage) m |= kMetricCpuUsage;
     if (c.showCpuTemp) m |= kMetricCpuTemp;
     if (c.showCpuPower) m |= kMetricCpuPower;
@@ -267,6 +275,8 @@ void OpenSettings(App& app) {
     app.previousForeground = GetForegroundWindow();
     app.monitors = EnumerateMonitors();
     std::snprintf(app.settings.hotkeyBuf, sizeof(app.settings.hotkeyBuf), "%s", app.cfg.hotkey.c_str());
+    std::snprintf(app.settings.recordHotkeyBuf,sizeof(app.settings.recordHotkeyBuf),"%s",app.cfg.recordHotkey.c_str());
+    app.settings.recordHotkeyRegistered=app.recordHotkeyRegistered;
     app.settings.open = true;
     UpdateBounds(app);
     RenderFrame(app); // the overlay may be hidden (ShowOnlyWithGame): show it before it takes focus
@@ -377,6 +387,7 @@ LRESULT CALLBACK TrayWndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
         switch (msg) {
         case WM_HOTKEY:
             if (wp == kHotkeyId) ToggleHud(*app);
+            else if (wp == kRecordHotkeyId) app->sensors.ToggleRecording();
             return 0;
         case WM_APP_OPEN_SETTINGS:
             OpenSettings(*app);
@@ -621,6 +632,7 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int) {
     SetGraphTimer(app, false);
     if (app.graphTimer) CloseHandle(app.graphTimer);
     if (app.hotkeyRegistered) UnregisterHotKey(app.trayWnd, kHotkeyId);
+    if (app.recordHotkeyRegistered) UnregisterHotKey(app.trayWnd,kRecordHotkeyId);
     RemoveTrayIcon(app);
     app.overlay.Destroy();
     DestroyWindow(app.trayWnd);

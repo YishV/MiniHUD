@@ -185,6 +185,9 @@ void SensorHub::Run() {
     uint32_t prevMask = 0;
     Clock::time_point lastPoll{};
     DWORD graphPid = 0; // whose frame times the graph shows, for updates between polls
+    DWORD recordPid=0, lowPid=0;
+    Clock::time_point nextLow{};
+    std::optional<FpsEtw::LowFps> lowCache;
 
     // Sleeps until `when`, or until woken early (new metrics or interval, shutdown).
     auto waitUntil = [this](Clock::time_point when) {
@@ -195,12 +198,13 @@ void SensorHub::Run() {
 
     while (!stop_) {
         if (const int command = recordCommand_.exchange(0)) {
-            if (command == 1) {
-                recorder_.Start();
+            if (command == 1 || (command == 3 && !recorder_.Active())) {
+                const bool started=recorder_.Start();
+                recordPid=0;
                 nextSampleAt_ = 0.0;
-                recordMessage_.clear();
-                DiagLog("recording started");
-            } else if (command == 2) {
+                recordMessage_=started ? "" : recorder_.Error();
+                DiagLog(started ? "recording started" : recordMessage_);
+            } else if (command == 2 || command == 3) {
                 recorder_.Stop();
                 if (recorder_.Save(recordMessage_))
                     DiagLog("recording saved");
@@ -208,10 +212,9 @@ void SensorHub::Run() {
                     DiagLog("recording failed: " + recordMessage_);
             }
         }
-        uint32_t mask = metrics_;
-        if (recorder_.Active()) mask |= kMetricFps; // recording needs frames even if FPS is hidden
+        const uint32_t mask = RecordingMetrics(metrics_,recorder_.Active());
         const auto now = Clock::now();
-        const auto interval = milliseconds(intervalMs_.load());
+        const auto interval = milliseconds(recorder_.Active() ? std::min(1000,intervalMs_.load()) : intervalMs_.load());
         const bool graph = (mask & kMetricFrameGraph) != 0;
         const bool fastGraph = graph && (mask & kMetricFastGraph);
         // Computed from the current interval, so a changed interval applies to the pending poll.
@@ -255,9 +258,8 @@ void SensorHub::Run() {
         if (wantFps && (turnedOn & kMetricFps) && !fps.IsRunning()) fps.Start();
         if (!wantFps && fps.IsRunning()) fps.Stop();
         // Keep the 1% low window when FPS is shown, plus the graph history when the graph is on.
-        const double keepSeconds = wantFps ? std::max(graph ? double(kGraphHistorySeconds) : 0.0,
-                                                      double(kLowFpsWindowSeconds) + 1.0)
-                                           : 0.0;
+        const double keepSeconds = (mask & kMetricLowFps) ? double(kLowFpsWindowSeconds)+1.0 :
+            (graph || recorder_.Active()) ? double(kGraphHistorySeconds) : 0.0;
         fps.SetHistorySeconds(keepSeconds);
 
         const HWND fgWnd = GetForegroundWindow();
@@ -289,17 +291,21 @@ void SensorHub::Run() {
 
         s.gameTracked = trackedPid != 0;
 
-        const DWORD target = trackedPid ? trackedPid : fgPid;
+        const DWORD target = recorder_.Active() && recordPid ? recordPid : trackedPid ? trackedPid : fgPid;
         if (wantFps && target) {
             // Flush only if the foreground query above did not already (no foreground app).
             const std::optional<double> v = target == fgPid ? fgFps : fps.GetFps(target, fgPid == 0);
             if (v && *v > 0.0) {
+                if (recorder_.Active() && !recordPid) recordPid=target;
                 s.fps = (float)*v;
                 s.frameTimeMs = (float)(1000.0 / *v);
             }
-            if (auto low = fps.GetLowFps(target, kLowFpsWindowSeconds, false)) {
-                s.fpsLow1 = (float)low->low1;
-                s.fpsLow01 = (float)low->low01;
+            if (mask & kMetricLowFps) {
+                if (target!=lowPid || now>=nextLow || (turnedOn & kMetricLowFps)) {
+                    lowCache=fps.GetLowFps(target,kLowFpsWindowSeconds,false);
+                    lowPid=target; nextLow=now+milliseconds(2000);
+                }
+                if (lowCache) { s.fpsLow1=static_cast<float>(lowCache->low1); s.fpsLow01=static_cast<float>(lowCache->low01); }
             }
             if (target != namePid) {
                 name = target == trackedPid ? trackedExe : ProcessExeName(target);
@@ -439,6 +445,7 @@ void SensorHub::Run() {
         s.recordSeconds = recorder_.Seconds();
         s.recordSamples = recorder_.Samples();
         s.recordMessage = recordMessage_;
+        if (!recorder_.Error().empty()) s.recordMessage=recorder_.Error();
 
         {
             std::lock_guard lock(mutex_);
@@ -448,4 +455,5 @@ void SensorHub::Run() {
 
         waitUntil(now + (fastGraph ? std::min(interval, milliseconds(kFastGraphPeriodMs)) : interval));
     }
+    if (recorder_.Active()) { recorder_.Stop(); recorder_.Save(recordMessage_); }
 }

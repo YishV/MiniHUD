@@ -32,12 +32,15 @@ struct Config {
     float backgroundAlpha = 0.92f;
     int updateIntervalMs = 500;
     std::string hotkey = "Ctrl+Shift+F12";
+    std::string recordHotkey = "Ctrl+Shift+F11";
+    std::array<int,kMetricCount> metricOrder = kDefaultMetricOrder;
     bool hideFromCapture = false;
 
     // [Metrics]
     bool showFps = true;
     bool showFrameTime = false;
-    bool showLowFps = true; // 1% / 0.1% low FPS
+    bool showLowFps = false; // 1% low FPS
+    bool showLow01Fps = false;
     bool showCpuUsage = false;
     bool showCpuTemp = true;
     bool showGpuUsage = false;

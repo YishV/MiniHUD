@@ -38,14 +38,22 @@ int main() {
     ImGui::NewFrame(); DrawStats(cfg,snap,ImVec2(12,12),ImVec2(0,0)); ImGui::Render();
     ImGui::NewFrame(); const auto english=DrawStats(cfg,snap,ImVec2(12,12),ImVec2(0,0)); ImGui::Render();
     const bool englishOk=english.x>0 && english.x<1920 && english.y==spaced.y && english.x!=spaced.x;
+    snap.recording=true;
+    ImGui::NewFrame(); DrawStats(cfg,snap,ImVec2(0,0),ImVec2(0,0)); ImGui::Render();
+    bool recordingDot=false;
+    for (const auto* list:ImGui::GetDrawData()->CmdLists)
+        for (const auto& vertex:list->VtxBuffer) if (vertex.col==IM_COL32(255,70,70,255)) recordingDot=true;
+    snap.recording=false;
     SettingsState state;
     std::snprintf(state.hotkeyBuf,sizeof(state.hotkeyBuf),"Ctrl+Shift+F12");
+    std::snprintf(state.recordHotkeyBuf,sizeof(state.recordHotkeyBuf),"Ctrl+Shift+F11");
     ImGui::NewFrame(); DrawSettings(cfg,snap,{},state); ImGui::Render();
     // Driver missing: renders the install button (bundled build) or the download button (default).
     snap.cpuNeedsDriver=true;
     ImGui::NewFrame(); const UiAction missing=DrawSettings(cfg,snap,{},state); ImGui::Render();
     const bool missingOk=missing==UiAction::None;
-    const bool ok=missingOk && englishOk && spacingOk && chineseGlyph && single.x>100 && single.x<1920 && single.y<50 && multi.y>single.y*2 && ImGui::GetDrawData()->TotalVtxCount>0;
+    const bool ok=recordingDot && missingOk && englishOk && spacingOk && chineseGlyph && single.x>100 && single.x<1920 && single.y<50 && multi.y>single.y*2 && ImGui::GetDrawData()->TotalVtxCount>0;
+    std::printf("Recording indicator: %s\n",recordingDot?"PASSED":"FAILED");
     std::printf("Driver-missing settings layout: %s\n",missingOk?"PASSED":"FAILED");
     std::printf("Chinese UI geometry: %s; single %.0fx%.0f; multi %.0fx%.0f\n",ok?"PASSED":"FAILED",single.x,single.y,multi.x,multi.y);
     std::printf("English metric style: %s; %.0fx%.0f\n",englishOk?"PASSED":"FAILED",english.x,english.y);

@@ -96,7 +96,12 @@ enum MetricBits : uint32_t {
     kMetricDiskTemp = 1u << 11,
     kMetricDiskSpeed = 1u << 12,
     kMetricNetworkSpeed = 1u << 13,
+    kMetricLowFps = 1u << 14,
 };
+inline uint32_t RecordingMetrics(uint32_t shown,bool recording) {
+    return recording ? shown | kMetricFps | kMetricCpuUsage | kMetricCpuTemp | kMetricCpuPower |
+        kMetricGpuUsage | kMetricGpuTemp | kMetricGpuPower | kMetricVram | kMetricRam : shown;
+}
 
 // Polls the shown sensors on a background thread and posts `notifyMsg` to `notifyWnd`
 // whenever a fresh snapshot is available. Most values refresh every update interval;
@@ -118,8 +123,9 @@ public:
     // Re-open the PawnIO driver on the next poll (after it was installed).
     void ReinitPawnIO() { reinitPawnIO_ = true; }
     // Start/stop a performance recording; stopped recordings are written to %APPDATA%\MiniHUD\records.
-    void StartRecording() { recordCommand_ = 1; }
-    void StopRecording() { recordCommand_ = 2; }
+    void StartRecording() { recordCommand_ = 1; Wake(); }
+    void StopRecording() { recordCommand_ = 2; Wake(); }
+    void ToggleRecording() { recordCommand_ = 3; Wake(); }
 
     SensorSnapshot Snapshot();
 

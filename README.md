@@ -1,6 +1,6 @@
 ﻿# MiniHUD
 
-Windows 游戏性能小黑卡。默认在屏幕左上角用单行显示帧率、1% / 0.1% 低帧、CPU 温度、GPU 温度和显存已用/总量。卡片无边框、点击穿透，优先支持无边框窗口游戏；不向游戏进程注入代码。
+Windows 游戏性能小黑卡。默认在屏幕左上角用单行显示帧率、CPU 温度、GPU 温度和显存已用/总量，1% / 0.1% 低帧可分别开启。卡片无边框、点击穿透，优先支持无边框窗口游戏；不向游戏进程注入代码。
 
 ## 下载
 
@@ -19,7 +19,7 @@ Windows 游戏性能小黑卡。默认在屏幕左上角用单行显示帧率、
 | 指标 | 数据来源 | 默认 |
 |---|---|---|
 | FPS | Windows ETW | 开 |
-| 1% / 0.1% 低帧 | 最近 60 秒逐帧数据，最慢 1% / 0.1% 帧的平均帧率 | 开 |
+| 1% / 0.1% 低帧 | 最近最多 60 秒逐帧数据，最慢 1% / 0.1% 帧的平均帧率 | 关 |
 | CPU 温度 | 已安装的 PawnIO 驱动；Intel 路径仍为实验性 | 开 |
 | GPU 温度、显存 | NVIDIA NVML、AMD ADL 或 Windows 回退源 | 开 |
 | RAM 已用/总量 | Windows 内存 API | 关 |
@@ -41,7 +41,11 @@ Windows 游戏性能小黑卡。默认在屏幕左上角用单行显示帧率、
 
 ## 性能记录与诊断
 
-在「性能记录」页点击「开始记录」，玩一段游戏后点「停止并生成报告」。停止时在 `%APPDATA%\MiniHUD\records` 生成两个文件：`MiniHUD-<时间>.csv`（每秒一行的明细，Excel 可直接打开）和同名 `.md` 报告（平均帧率、1% / 0.1% low、帧时间 P50/P95/P99、卡顿占比、CPU/GPU 占用与温度峰值、显存峰值，并附一段可读结论）。记录只保存在本机，不会上传。
+`Ctrl+Shift+F11` 开始 / 停止录制，可在显示设置中修改；小黑条上的红点表示正在录制。隐藏小黑条不会停止录制。录制会锁定开始时选中的渲染进程，切换其他应用不会混入其帧率。
+
+显示设置中的“拖动调整指标顺序”支持拖动排序，关闭的指标仍保留位置，顺序随配置保存。
+
+在「性能记录」页点击「开始记录」，玩一段游戏后点「停止并生成报告」。停止时在 `%APPDATA%\MiniHUD\records` 生成两个文件：`MiniHUD-<时间>.csv`（每秒一行的明细，Excel 可直接打开）和同名 `.md` 报告（平均帧率、1% / 0.1% low、帧时间 P50/P95/P99、卡顿占比、CPU/GPU 占用与温度峰值、显存峰值，并附一段可读结论）。记录只保存在本机，不会上传。CSV 在录制时逐行写入，统计缓存固定约 125 KB，导出后释放；均值使用全量计数，分位数与低帧使用分桶近似（100ms 内桶宽 0.1ms），报告注明精度。报告缺失指标显示“无数据”，不写成 0。录制采样独立于黑条显示开关。
 
 程序会把启动、传感器初始化、驱动安装、记录等关键事件写入 `%APPDATA%\MiniHUD\MiniHUD.log`（超过 512 KB 自动轮转）。遇到异常时，在「电脑配置 → 诊断」点击「导出诊断信息」，会把版本、Windows 版本、制造商/主板/BIOS、传感器状态和日志尾部写入 `%APPDATA%\MiniHUD\diagnostics`，方便反馈问题。
 
@@ -55,10 +59,10 @@ cmake --build build\vs2022-final --config Release --parallel 4
 
 # 安装包：需要 Inno Setup 6（winget install JRSoftware.InnoSetup）
 & "$env:LOCALAPPDATA\Programs\Inno Setup 6\ISCC.exe" installer\minihud.iss `
-  /DBuildDir=..\build\vs2022-final\Release /DAppVersion=1.1.1
+  /DBuildDir=..\build\vs2022-final\Release /DAppVersion=1.0
 ```
 
-生成的安装包在 `release\v1.1.1\MiniHUD-Setup.exe`，安装到 `%LocalAppData%\Programs\MiniHUD`。
+生成的安装包在 `release\v1.0\MiniHUD-Setup.exe`，安装到 `%LocalAppData%\Programs\MiniHUD`。
 
 ## 来源与许可
 

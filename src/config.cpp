@@ -59,6 +59,12 @@ Corner ParseCorner(const std::string& s, Corner def) {
 } // namespace
 
 void Config::Clamp() {
+    std::array<bool,kMetricCount> seen{};
+    std::array<int,kMetricCount> normalized{};
+    size_t next=0;
+    for (int id:metricOrder) if (id>=0 && id<static_cast<int>(kMetricCount) && !seen[id]) { seen[id]=true; normalized[next++]=id; }
+    for (int id:kDefaultMetricOrder) if (!seen[id]) normalized[next++]=id;
+    metricOrder=normalized;
     itemsPerRow = std::clamp(itemsPerRow, 1, 8);
     moduleGap = std::isfinite(moduleGap) ? std::clamp(moduleGap, 0.0f, 80.0f) : 16.0f;
     rowGap = std::isfinite(rowGap) ? std::clamp(rowGap, 0.0f, 40.0f) : 4.0f;
@@ -128,6 +134,12 @@ bool LoadConfig(const std::wstring& path, Config& cfg) {
     cfg.backgroundAlpha = ReadFloat(path, ov, L"BackgroundAlpha", cfg.backgroundAlpha);
     cfg.updateIntervalMs = ReadInt(path, ov, L"UpdateIntervalMs", cfg.updateIntervalMs);
     cfg.hotkey = ReadString(path, ov, L"Hotkey", cfg.hotkey);
+    cfg.recordHotkey = ReadString(path,ov,L"RecordHotkey",cfg.recordHotkey);
+    const auto order=ReadString(path,ov,L"MetricOrder","");
+    if (!order.empty()) {
+        cfg.metricOrder.fill(-1); std::stringstream input(order); std::string token; size_t i=0;
+        while (i<kMetricCount && std::getline(input,token,',')) { try { cfg.metricOrder[i]=std::stoi(token); } catch (...) {} ++i; }
+    }
     cfg.hideFromCapture = ReadBool(path, ov, L"HideFromCapture", cfg.hideFromCapture);
     cfg.singleLine = ReadBool(path, ov, L"SingleLine", cfg.singleLine);
     cfg.englishMetrics = ReadBool(path, ov, L"EnglishMetrics", cfg.englishMetrics);
@@ -149,6 +161,7 @@ bool LoadConfig(const std::wstring& path, Config& cfg) {
     cfg.showFps = ReadBool(path, me, L"ShowFps", cfg.showFps);
     cfg.showFrameTime = ReadBool(path, me, L"ShowFrameTime", cfg.showFrameTime);
     cfg.showLowFps = ReadBool(path, me, L"ShowLowFps", cfg.showLowFps);
+    cfg.showLow01Fps = ReadBool(path, me, L"ShowLow01Fps", cfg.showLowFps); // migrate the old combined switch
     cfg.showCpuUsage = ReadBool(path, me, L"ShowCpuUsage", cfg.showCpuUsage);
     cfg.showCpuTemp = ReadBool(path, me, L"ShowCpuTemp", cfg.showCpuTemp);
     cfg.showGpuUsage = ReadBool(path, me, L"ShowGpuUsage", cfg.showGpuUsage);
@@ -245,6 +258,12 @@ bool SaveConfig(const std::wstring& path, const Config& cfg) {
                   "\r\nRowGap=" + std::to_string(cfg.rowGap) +
                   "\r\nEnglishMetrics=" + std::to_string(cfg.englishMetrics) + "\r\n\r\n");
     output.insert(output.find("[Metrics]"), "StartupDefaultApplied=" + std::to_string(cfg.startupDefaultApplied) + "\r\n\r\n");
+    std::ostringstream layout;
+    layout<<"RecordHotkey="<<cfg.recordHotkey<<"\r\nMetricOrder=";
+    for (size_t i=0;i<kMetricCount;++i) { if (i) layout<<','; layout<<cfg.metricOrder[i]; }
+    layout<<"\r\n\r\n";
+    output.insert(output.find("[Metrics]"),layout.str());
+    output.insert(output.find("ShowLowFps="),"ShowLow01Fps="+std::to_string(cfg.showLow01Fps)+"\r\n");
     output += extra.str();
 
     HANDLE f = CreateFileW(path.c_str(), GENERIC_WRITE, 0, nullptr, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);

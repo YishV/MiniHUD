@@ -1,5 +1,6 @@
 #include "config.h"
 #include "util.h"
+#include "sensor_hub.h"
 #include <cstdio>
 #include <limits>
 
@@ -28,6 +29,9 @@ int main() {
     config.alertsEnabled = false;
     config.showRam = true;
     config.offerPawnIOInstall = false;
+    config.recordHotkey="Alt+F9";
+    config.showLowFps=false; config.showLow01Fps=true;
+    MoveMetric(config.metricOrder,static_cast<int>(Metric::GpuTemp),static_cast<int>(Metric::Fps));
     for (size_t i = 0; i < kMetricCount; ++i) config.alertLimits[i] = static_cast<float>(i) + .5f;
     check(SaveConfig(path, config), "save config");
     Config restored;
@@ -35,6 +39,13 @@ int main() {
     check(!restored.singleLine && restored.itemsPerRow == 3 && restored.corner == Corner::BottomRight,
           "layout persists without repeated migration");
     check(!restored.alertsEnabled && restored.showRam, "toggles persist");
+    check(restored.metricOrder==config.metricOrder && restored.metricOrder.front()==static_cast<int>(Metric::GpuTemp),"dragged metric order persists");
+    check(restored.recordHotkey=="Alt+F9","record hotkey persists");
+    check(!restored.showLowFps && restored.showLow01Fps,"low FPS switches are independent");
+    check((RecordingMetrics(0,true)&(kMetricCpuUsage|kMetricGpuUsage|kMetricRam))==(kMetricCpuUsage|kMetricGpuUsage|kMetricRam),"recording collects hidden report metrics");
+    check(!(RecordingMetrics(0,true)&kMetricLowFps) && RecordingMetrics(0,false)==0,"low-FPS sorting remains off unless requested");
+    Config badOrder; badOrder.metricOrder.fill(999); badOrder.Clamp();
+    check(badOrder.metricOrder==kDefaultMetricOrder,"invalid metric order repaired");
     check(!restored.offerPawnIOInstall, "declined driver install remains declined");
     check(restored.englishMetrics, "English metric style persists");
     check(restored.startupDefaultApplied, "explicit startup preference survives restart");

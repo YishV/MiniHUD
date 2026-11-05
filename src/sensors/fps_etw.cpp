@@ -190,6 +190,20 @@ void FpsEtw::Prune(int64_t cutoff) {
     }
 }
 
+void FpsEtw::SetHistorySeconds(double seconds) {
+    if (seconds==historySeconds_) return;
+    const bool shrinking=seconds<historySeconds_;
+    historySeconds_=seconds;
+    if (!shrinking) return;
+    std::lock_guard lock(mutex_);
+    Prune(Qpc()-static_cast<int64_t>((std::max(1.0,seconds)+1)*qpcFreq_));
+    for (auto& [pid,frames]:frames_) {
+        (void)pid;
+        for (auto* queue:{&frames.api,&frames.kernel})
+            if (queue->capacity()>queue->size()*4+2048) std::vector<int64_t>(*queue).swap(*queue);
+    }
+}
+
 // Pushes buffered events to the consumer so the numbers stay fresh.
 void FpsEtw::Flush() {
     TraceProps props;
@@ -280,6 +294,8 @@ std::optional<FpsEtw::LowFps> FpsEtw::GetLowFps(DWORD pid, double seconds, bool 
     if (!running_) return std::nullopt;
     if (flush) Flush();
 
+    std::vector<int64_t> times;
+    {
     std::lock_guard lock(mutex_);
     const int64_t windowEnd = WindowEnd();
     const int64_t windowStart = windowEnd - int64_t(seconds * qpcFreq_);
@@ -292,10 +308,11 @@ std::optional<FpsEtw::LowFps> FpsEtw::GetLowFps(DWORD pid, double seconds, bool 
             if (t >= windowStart && t <= windowEnd) times.push_back(t);
         return times;
     };
-    std::vector<int64_t> times = collect(it->second.api);
+    times = collect(it->second.api);
     if (times.size() < 2) times = collect(it->second.kernel);
     // One good second at 120 FPS is 120 frames: below that the percentiles are noise.
     if (times.size() < 64) return std::nullopt;
+    } // sort and statistics run without blocking ETW event delivery
 
     std::sort(times.begin(), times.end());
     const double msPerTick = 1000.0 / double(qpcFreq_);

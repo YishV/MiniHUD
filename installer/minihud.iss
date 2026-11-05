@@ -8,7 +8,7 @@
 
 #define MyAppName "MiniHUD"
 #ifndef AppVersion
-  #define AppVersion "1.1.1"
+  #define AppVersion "1.0"
 #endif
 #ifndef BuildDir
   #define BuildDir "..\build\vs2022-final\Release"
@@ -27,7 +27,7 @@ AppPublisher={#MyAppPublisher}
 AppPublisherURL={#MyAppURL}
 AppSupportURL={#MyAppURL}
 AppUpdatesURL={#MyAppURL}/releases
-VersionInfoVersion={#AppVersion}.0
+VersionInfoVersion=1.0.0.0
 VersionInfoCompany={#MyAppPublisher}
 VersionInfoDescription={#MyAppName} 安装程序
 DefaultDirName={localappdata}\Programs\{#MyAppName}

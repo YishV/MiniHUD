@@ -1,6 +1,7 @@
 // Synthetic frame-time checks for the shared statistics used by the HUD and the recorder.
 
 #include "frame_stats.h"
+#include "frame_histogram.h"
 
 #include <cmath>
 #include <cstdio>
@@ -25,6 +26,14 @@ int main() {
     std::vector<float> frames(990, 1000.0f / 120.0f);
     frames.insert(frames.end(), 10, 1000.0f / 30.0f);
     const FrameStats mixed = ComputeFrameStats(frames);
+    FrameHistogram histogram;
+    for(float ms:frames) histogram.Add(ms);
+    const auto bounded=histogram.Summary();
+    Check(Near(bounded.avgFps,mixed.avgFps,.01) && Near(bounded.low1Fps,mixed.low1Fps,.1),"bounded histogram matches exact baseline");
+    const auto bytes=histogram.Bytes();
+    for(int i=0;i<1000000;++i) histogram.Add(8.333f);
+    Check(histogram.Bytes()==bytes && bytes<200000,"million-frame recording keeps fixed memory");
+    histogram.Clear(); Check(histogram.Bytes()==0,"histogram release");
     Check(mixed.frames == 1000, "frame count");
     Check(Near(mixed.avgFps, 1000.0 / ((990 * (1000.0 / 120.0) + 10 * (1000.0 / 30.0)) / 1000.0), 0.5), "average FPS");
     Check(Near(mixed.low1Fps, 30.0, 1.0), "1% low picks the slow frames");
