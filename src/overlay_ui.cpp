@@ -153,11 +153,14 @@ ImVec2 CornerPivot(Corner c) {
 namespace {
 struct HudItem { std::string label, text; ImVec4 color; };
 const char* const metricLabels[] = {"帧率", "帧时间", "CPU 占用", "CPU 温度", "GPU 占用", "GPU 温度",
-    "CPU 功耗", "GPU 功耗", "显存", "内存", "SSD 温度", "磁盘读取", "磁盘写入", "下载", "上传"};
+    "CPU 功耗", "GPU 功耗", "显存", "内存", "SSD 温度", "磁盘读取", "磁盘写入", "下载", "上传",
+    "1% 低帧", "0.1% 低帧"};
 const char* const englishLabels[] = {"FPS", "Frame Time", "CPU Load", "CPU Temp", "GPU Load", "GPU Temp",
-    "CPU Power", "GPU Power", "VRAM", "RAM", "SSD Temp", "Disk Read", "Disk Write", "Down", "Up"};
+    "CPU Power", "GPU Power", "VRAM", "RAM", "SSD Temp", "Disk Read", "Disk Write", "Down", "Up",
+    "1% Low", "0.1% Low"};
 const char* const metricUnits[] = {"低于 FPS", "达到 ms", "达到 %", "达到 ℃", "达到 %", "达到 ℃",
-    "达到 W", "达到 W", "达到 %", "达到 %", "达到 ℃", "达到 MB/s", "达到 MB/s", "达到 MB/s", "达到 MB/s"};
+    "达到 W", "达到 W", "达到 %", "达到 %", "达到 ℃", "达到 MB/s", "达到 MB/s", "达到 MB/s", "达到 MB/s",
+    "低于 FPS", "低于 FPS"};
 std::string StatusText(const std::string& text) {
     if (text.find("not installed") != std::string::npos) return "未安装 PawnIO 驱动";
     if (text.find("access denied") != std::string::npos) return "权限不足，请以管理员身份运行";
@@ -198,6 +201,10 @@ ImVec2 DrawStats(const Config& cfg, const SensorSnapshot& snap, ImVec2 pos, ImVe
     };
     if (cfg.showFps) add(Metric::Fps, snap.fps, "%.0f");
     if (cfg.showFrameTime) add(Metric::FrameTime, snap.frameTimeMs, "%.1f ms");
+    if (cfg.showLowFps) {
+        add(Metric::FpsLow1, snap.fpsLow1, "%.0f");
+        add(Metric::FpsLow01, snap.fpsLow01, "%.0f");
+    }
     if (cfg.showCpuUsage) add(Metric::CpuUsage, snap.cpuUsage, "%.0f%%");
     if (cfg.showCpuTemp) temp(Metric::CpuTemp, snap.cpuTemp);
     if (cfg.showGpuUsage) add(Metric::GpuUsage, snap.gpuUsage, "%.0f%%");
@@ -270,6 +277,8 @@ UiAction DrawSettings(Config& cfg, const SensorSnapshot& snap, const std::vector
                     &cfg.showCpuPower,&cfg.showGpuPower,&cfg.showVram,&cfg.showRam,&cfg.showDiskTemp};
                 if (ImGui::BeginTable("##metrics", 2)) {
                     for (size_t i=0;i<std::size(toggles);++i) { ImGui::TableNextColumn(); ImGui::Checkbox(metricLabels[i],toggles[i]); }
+                    ImGui::TableNextColumn(); ImGui::Checkbox("1% / 0.1% 低帧", &cfg.showLowFps);
+                    ImGui::SetItemTooltip("最近 60 秒里最慢的 1% 和 0.1% 帧对应的帧率，越低说明卡顿越重。");
                     ImGui::TableNextColumn(); ImGui::Checkbox("磁盘读写速度", &cfg.showDiskSpeed);
                     ImGui::TableNextColumn(); ImGui::Checkbox("网络上传 / 下载", &cfg.showNetworkSpeed);
                     ImGui::TableNextColumn(); ImGui::Checkbox("帧时间曲线", &cfg.showFrameGraph);

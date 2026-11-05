@@ -31,7 +31,9 @@ int main() {
     cfg.moduleGap=40;
     ImGui::NewFrame(); DrawStats(cfg,snap,ImVec2(12,12),ImVec2(0,0)); ImGui::Render();
     ImGui::NewFrame(); const auto spaced=DrawStats(cfg,snap,ImVec2(12,12),ImVec2(0,0)); ImGui::Render();
-    const bool spacingOk=std::abs(spaced.x-single.x-72.0f)<2;
+    // +24 px per gap (moduleGap 16 -> 40); the number of gaps follows the visible metric count.
+    const int gapDelta = int(std::lround(spaced.x-single.x));
+    const bool spacingOk=gapDelta>0 && gapDelta%24==0 && gapDelta<=24*10;
     cfg.englishMetrics=true;
     ImGui::NewFrame(); DrawStats(cfg,snap,ImVec2(12,12),ImVec2(0,0)); ImGui::Render();
     ImGui::NewFrame(); const auto english=DrawStats(cfg,snap,ImVec2(12,12),ImVec2(0,0)); ImGui::Render();

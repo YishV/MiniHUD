@@ -188,3 +188,6 @@ target_compile_definitions(minihud_startup_check PRIVATE WIN32_LEAN_AND_MEAN NOM
 target_compile_options(minihud_startup_check PRIVATE /utf-8)
 target_link_libraries(minihud_startup_check PRIVATE advapi32 taskschd ole32 oleaut32)
 target_link_options(minihud_startup_check PRIVATE "/MANIFESTUAC:level='asInvoker' uiAccess='false'")
+add_executable(minihud_frame_stats_check EXCLUDE_FROM_ALL tools/frame_stats_check.cpp)
+target_include_directories(minihud_frame_stats_check PRIVATE src)
+target_compile_options(minihud_frame_stats_check PRIVATE /utf-8)

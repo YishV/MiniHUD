@@ -33,7 +33,16 @@ public:
     // QPC time of its newest frame. Returns false if it did not present in that time.
     bool GetFrameTimes(DWORD pid, double seconds, bool flush, std::vector<float>& frameMs, int64_t& lastFrameQpc);
 
-    // How much present history to keep beyond the one second FPS needs (frame time graph).
+    // FPS at the slowest 1% and 0.1% of frames over `seconds` (1000 / percentile frame time).
+    // Nullopt until enough frames were delivered for the percentiles to mean anything.
+    struct LowFps {
+        double low1 = 0.0;
+        double low01 = 0.0;
+    };
+    std::optional<LowFps> GetLowFps(DWORD pid, double seconds, bool flush);
+
+    // How much present history to keep beyond the one second FPS needs (frame time graph,
+    // 1% low window).
     void SetHistorySeconds(double seconds) { historySeconds_ = seconds; }
 
 private:

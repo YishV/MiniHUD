@@ -186,7 +186,11 @@ void SensorHub::Run() {
         const bool wantFps = (mask & kMetricFps) != 0;
         if (wantFps && (turnedOn & kMetricFps) && !fps.IsRunning()) fps.Start();
         if (!wantFps && fps.IsRunning()) fps.Stop();
-        fps.SetHistorySeconds(graph ? kGraphHistorySeconds : 0.0);
+        // Keep the 1% low window when FPS is shown, plus the graph history when the graph is on.
+        const double keepSeconds = wantFps ? std::max(graph ? double(kGraphHistorySeconds) : 0.0,
+                                                      double(kLowFpsWindowSeconds) + 1.0)
+                                           : 0.0;
+        fps.SetHistorySeconds(keepSeconds);
 
         const HWND fgWnd = GetForegroundWindow();
         DWORD fgPid = fgWnd ? WindowProcessId(fgWnd) : 0;
@@ -224,6 +228,10 @@ void SensorHub::Run() {
             if (v && *v > 0.0) {
                 s.fps = (float)*v;
                 s.frameTimeMs = (float)(1000.0 / *v);
+            }
+            if (auto low = fps.GetLowFps(target, kLowFpsWindowSeconds, false)) {
+                s.fpsLow1 = (float)low->low1;
+                s.fpsLow01 = (float)low->low01;
             }
             if (target != namePid) {
                 name = target == trackedPid ? trackedExe : ProcessExeName(target);

@@ -1,5 +1,6 @@
 #include "sensors/fps_etw.h"
 
+#include "frame_stats.h"
 #include "util.h"
 
 #include <algorithm>
@@ -273,4 +274,39 @@ bool FpsEtw::GetFrameTimes(DWORD pid, double seconds, bool flush, std::vector<fl
     for (size_t i = 1; i < times.size(); ++i) frameMs.push_back(float(double(times[i] - times[i - 1]) * msPerTick));
     lastFrameQpc = times.back();
     return true;
+}
+
+std::optional<FpsEtw::LowFps> FpsEtw::GetLowFps(DWORD pid, double seconds, bool flush) {
+    if (!running_) return std::nullopt;
+    if (flush) Flush();
+
+    std::lock_guard lock(mutex_);
+    const int64_t windowEnd = WindowEnd();
+    const int64_t windowStart = windowEnd - int64_t(seconds * qpcFreq_);
+    auto it = frames_.find(pid);
+    if (it == frames_.end()) return std::nullopt;
+
+    auto collect = [&](const std::vector<int64_t>& q) {
+        std::vector<int64_t> times;
+        for (int64_t t : q)
+            if (t >= windowStart && t <= windowEnd) times.push_back(t);
+        return times;
+    };
+    std::vector<int64_t> times = collect(it->second.api);
+    if (times.size() < 2) times = collect(it->second.kernel);
+    // One good second at 120 FPS is 120 frames: below that the percentiles are noise.
+    if (times.size() < 64) return std::nullopt;
+
+    std::sort(times.begin(), times.end());
+    const double msPerTick = 1000.0 / double(qpcFreq_);
+    std::vector<float> frameMs;
+    frameMs.reserve(times.size() - 1);
+    for (size_t i = 1; i < times.size(); ++i) frameMs.push_back(float(double(times[i] - times[i - 1]) * msPerTick));
+
+    const FrameStats stats = ComputeFrameStats(std::move(frameMs));
+    if (stats.low1Fps <= 0.0f) return std::nullopt;
+    LowFps low;
+    low.low1 = stats.low1Fps;
+    low.low01 = stats.low01Fps;
+    return low;
 }

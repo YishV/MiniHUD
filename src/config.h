@@ -37,6 +37,7 @@ struct Config {
     // [Metrics]
     bool showFps = true;
     bool showFrameTime = false;
+    bool showLowFps = true; // 1% / 0.1% low FPS
     bool showCpuUsage = false;
     bool showCpuTemp = true;
     bool showGpuUsage = false;

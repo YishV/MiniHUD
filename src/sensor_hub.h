@@ -12,6 +12,7 @@
 #include <vector>
 
 constexpr float kFrameGraphSeconds = 5.0f; // time span of the frame time graph
+constexpr float kLowFpsWindowSeconds = 60.0f; // 1% / 0.1% low window
 constexpr float kStutterWindowSeconds = 1.0f; // a stutter is a frame over twice the average of this long before it
 constexpr int kFastGraphPeriodMs = 33;     // graph data refresh and redraw with fast updates on (~30 Hz)
 constexpr WPARAM kSnapshotGraphOnly = 1;   // notify wParam: only the frame time graph data changed
@@ -19,6 +20,8 @@ constexpr WPARAM kSnapshotGraphOnly = 1;   // notify wParam: only the frame time
 struct SensorSnapshot {
     std::optional<float> fps;
     std::optional<float> frameTimeMs;
+    std::optional<float> fpsLow1;   // FPS at the slowest 1% of the last kLowFpsWindowSeconds
+    std::optional<float> fpsLow01;  // ... and the slowest 0.1%
     std::optional<float> cpuUsage;
     std::optional<float> cpuTemp;
     std::optional<float> gpuUsage;

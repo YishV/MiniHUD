@@ -169,7 +169,7 @@ void SetForegroundHook(App& app, bool enabled) {
 // The sensors to poll: only the metrics that are shown.
 uint32_t MetricMask(const Config& c) {
     uint32_t m = 0;
-    if (c.showFps || c.showFrameTime || c.onlyWithGame) m |= kMetricFps; // games are detected by their frames
+    if (c.showFps || c.showFrameTime || c.showLowFps || c.onlyWithGame) m |= kMetricFps; // games are detected by their frames
     if (c.showCpuUsage) m |= kMetricCpuUsage;
     if (c.showCpuTemp) m |= kMetricCpuTemp;
     if (c.showCpuPower) m |= kMetricCpuPower;

@@ -148,6 +148,7 @@ bool LoadConfig(const std::wstring& path, Config& cfg) {
     const wchar_t* me = L"Metrics";
     cfg.showFps = ReadBool(path, me, L"ShowFps", cfg.showFps);
     cfg.showFrameTime = ReadBool(path, me, L"ShowFrameTime", cfg.showFrameTime);
+    cfg.showLowFps = ReadBool(path, me, L"ShowLowFps", cfg.showLowFps);
     cfg.showCpuUsage = ReadBool(path, me, L"ShowCpuUsage", cfg.showCpuUsage);
     cfg.showCpuTemp = ReadBool(path, me, L"ShowCpuTemp", cfg.showCpuTemp);
     cfg.showGpuUsage = ReadBool(path, me, L"ShowGpuUsage", cfg.showGpuUsage);
@@ -195,6 +196,8 @@ bool SaveConfig(const std::wstring& path, const Config& cfg) {
         "[Metrics]\r\n"
         "ShowFps=%d\r\n"
         "ShowFrameTime=%d\r\n"
+        "; 1 = low percentile FPS (slowest 1 and 0.1 percent of frames, last 60 s)\r\n"
+        "ShowLowFps=%d\r\n"
         "ShowCpuUsage=%d\r\n"
         "ShowCpuTemp=%d\r\n"
         "ShowGpuUsage=%d\r\n"
@@ -219,11 +222,12 @@ bool SaveConfig(const std::wstring& path, const Config& cfg) {
         "ShowOnlyWhenGameFocused=%d\r\n"
         "\r\n"
         "[Sensors]\r\n"
-        "; 1 = offer to install the bundled PawnIO driver (needed for CPU temperature and power) on startup\r\n"
+        "; 1 = offer to download and install the PawnIO driver (needed for CPU temperature and power) on startup\r\n"
         "OfferPawnIOInstall=%d\r\n",
         CornerToString(cfg.corner), cfg.offsetX, cfg.offsetY, cfg.monitor, cfg.fontScale, cfg.backgroundAlpha,
         cfg.updateIntervalMs, cfg.hotkey.c_str(), cfg.hideFromCapture ? 1 : 0,
-        cfg.showFps ? 1 : 0, cfg.showFrameTime ? 1 : 0, cfg.showCpuUsage ? 1 : 0, cfg.showCpuTemp ? 1 : 0,
+        cfg.showFps ? 1 : 0, cfg.showFrameTime ? 1 : 0, cfg.showLowFps ? 1 : 0,
+        cfg.showCpuUsage ? 1 : 0, cfg.showCpuTemp ? 1 : 0,
         cfg.showGpuUsage ? 1 : 0, cfg.showGpuTemp ? 1 : 0, cfg.showCpuPower ? 1 : 0, cfg.showGpuPower ? 1 : 0,
         cfg.showVram ? 1 : 0, cfg.showRam ? 1 : 0,
         cfg.showDiskTemp ? 1 : 0, cfg.showDiskSpeed ? 1 : 0, cfg.showNetworkSpeed ? 1 : 0,
