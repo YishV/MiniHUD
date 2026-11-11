@@ -6,6 +6,7 @@
 #include "metric_rules.h"
 
 enum class Corner { TopLeft = 0, TopRight, BottomLeft, BottomRight, TopCenter };
+enum class ThemeMode { Dark = 0, Light, System };
 
 // Value ranges enforced by Config::Clamp, which are also the ranges of the settings panel controls.
 constexpr int kMaxOffset = 4000;
@@ -36,7 +37,8 @@ struct Config {
     float fontScale = 1.0f;
     float backgroundAlpha = 0.92f;
     bool fixedValueWidth = false; // reserve the widest sample per value (stable, but wider gaps)
-    bool lightTheme = false;      // black text, for a transparent overlay over light backgrounds
+    ThemeMode themeMode = ThemeMode::System; // persisted choice
+    bool lightTheme = false;      // effective theme, refreshed on startup and WM_SETTINGCHANGE
     int updateIntervalMs = 500;
     std::string hotkey = "Ctrl+Shift+F12";
     std::string recordHotkey = "Ctrl+Shift+F11";
@@ -85,6 +87,14 @@ bool SaveConfig(const std::wstring& path, const Config& cfg);
 bool LoadConfigOrMigrate(const std::wstring& path, Config& cfg);
 
 const char* CornerToString(Corner c);
+const char* ThemeToString(ThemeMode mode);
+ThemeMode ParseTheme(const std::string& text, ThemeMode fallback);
+
+// Windows "app theme" (Personalize\AppsUseLightTheme).
+bool SystemUsesLightTheme();
+
+// Dark/Light/System choice -> the theme DrawStats uses right now.
+bool EffectiveLightTheme(ThemeMode mode);
 
 // "Ctrl+Shift+F12" -> MOD_CONTROL|MOD_SHIFT, VK_F12. Returns false on unknown syntax.
 bool ParseHotkey(const std::string& text, UINT& mods, UINT& vk);

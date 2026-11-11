@@ -392,6 +392,10 @@ LRESULT CALLBACK TrayWndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
             return 0;
         }
         switch (msg) {
+        case WM_SETTINGCHANGE: // Windows app theme switched: refresh the effective theme
+            app->cfg.lightTheme = EffectiveLightTheme(app->cfg.themeMode);
+            app->dirty = true;
+            return 0;
         case WM_CLOSE:
             // Also the path Windows' Restart Manager uses to close us before an upgrade installs.
             Quit(*app);
@@ -422,6 +426,10 @@ LRESULT CALLBACK TrayWndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
 
 std::optional<LRESULT> OverlayMessage(App& app, HWND, UINT msg, WPARAM wp, LPARAM lp) {
     switch (msg) {
+    case WM_SETTINGCHANGE: // settings panel open: the overlay window also gets the broadcast
+        app.cfg.lightTheme = EffectiveLightTheme(app.cfg.themeMode);
+        app.dirty = true;
+        return 0;
     case WM_APP_SENSORS: {
         auto next=app.sensors.Snapshot();
         const double now=double(Qpc())/double(QpcFrequency());
@@ -590,6 +598,7 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int) {
     g_app = &app;
     app.configPath = DefaultConfigPath();
     LoadConfigOrMigrate(app.configPath, app.cfg);
+    app.cfg.lightTheme = EffectiveLightTheme(app.cfg.themeMode);
     DiagLog(std::string("MiniHUD ") + kAppVersion + " starting; Windows " + OsVersionText());
     DiagLog("config: " + Narrow(app.configPath));
     if (!app.cfg.startupDefaultApplied) {

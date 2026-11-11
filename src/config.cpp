@@ -128,6 +128,39 @@ const char* CornerToString(Corner c) {
     return "TopRight";
 }
 
+const char* ThemeToString(ThemeMode mode) {
+    switch (mode) {
+    case ThemeMode::Dark: return "Dark";
+    case ThemeMode::Light: return "Light";
+    case ThemeMode::System: return "System";
+    }
+    return "System";
+}
+
+ThemeMode ParseTheme(const std::string& text, ThemeMode fallback) {
+    const std::string lower = ToLower(text);
+    if (lower == "dark") return ThemeMode::Dark;
+    if (lower == "light") return ThemeMode::Light;
+    if (lower == "system") return ThemeMode::System;
+    return fallback;
+}
+
+bool SystemUsesLightTheme() {
+    HKEY key = nullptr;
+    if (RegOpenKeyExW(HKEY_CURRENT_USER, L"Software\\Microsoft\\Windows\\CurrentVersion\\Themes\\Personalize", 0,
+                      KEY_READ, &key) != ERROR_SUCCESS)
+        return false;
+    DWORD value = 0, size = sizeof(value);
+    const bool ok =
+        RegGetValueW(key, nullptr, L"AppsUseLightTheme", RRF_RT_REG_DWORD, nullptr, &value, &size) == ERROR_SUCCESS;
+    RegCloseKey(key);
+    return ok && value != 0;
+}
+
+bool EffectiveLightTheme(ThemeMode mode) {
+    return mode == ThemeMode::Light || (mode == ThemeMode::System && SystemUsesLightTheme());
+}
+
 bool LoadConfig(const std::wstring& path, Config& cfg) {
     if (GetFileAttributesW(path.c_str()) == INVALID_FILE_ATTRIBUTES) return false;
 
@@ -139,7 +172,16 @@ bool LoadConfig(const std::wstring& path, Config& cfg) {
     cfg.fontScale = ReadFloat(path, ov, L"FontScale", cfg.fontScale);
     cfg.backgroundAlpha = ReadFloat(path, ov, L"BackgroundAlpha", cfg.backgroundAlpha);
     cfg.fixedValueWidth = ReadBool(path, ov, L"FixedValueWidth", cfg.fixedValueWidth);
-    cfg.lightTheme = ReadBool(path, ov, L"LightTheme", cfg.lightTheme);
+    // Theme= supersedes the old LightTheme flag; configs without either follow Windows.
+    const std::string theme = ReadString(path, ov, L"Theme", "");
+    if (!theme.empty()) {
+        cfg.themeMode = ParseTheme(theme, ThemeMode::System);
+    } else {
+        const int legacyLight = ReadInt(path, ov, L"LightTheme", -1);
+        cfg.themeMode = legacyLight < 0 ? ThemeMode::System
+                                        : (legacyLight ? ThemeMode::Light : ThemeMode::Dark);
+    }
+    cfg.lightTheme = EffectiveLightTheme(cfg.themeMode);
     cfg.updateIntervalMs = ReadInt(path, ov, L"UpdateIntervalMs", cfg.updateIntervalMs);
     cfg.hotkey = ReadString(path, ov, L"Hotkey", cfg.hotkey);
     cfg.recordHotkey = ReadString(path,ov,L"RecordHotkey",cfg.recordHotkey);
@@ -216,8 +258,8 @@ bool SaveConfig(const std::wstring& path, const Config& cfg) {
         "BackgroundAlpha=%.2f\r\n"
         "; 1 = reserve a fixed width per value (stable, but wider gaps)\r\n"
         "FixedValueWidth=%d\r\n"
-        "; 1 = dark text, for a transparent overlay over light backgrounds\r\n"
-        "LightTheme=%d\r\n"
+        "; Dark | Light | System (follow the Windows app theme)\r\n"
+        "Theme=%s\r\n"
         "UpdateIntervalMs=%d\r\n"
         "; Modifiers: Ctrl, Shift, Alt, Win. Keys: F1-F24, A-Z, 0-9, Insert, Delete, Home, End, PageUp, PageDown, Pause, ScrollLock\r\n"
         "Hotkey=%s\r\n"
@@ -259,7 +301,7 @@ bool SaveConfig(const std::wstring& path, const Config& cfg) {
         "; 1 = offer to download and install the PawnIO driver (needed for CPU temperature and power) on startup\r\n"
         "OfferPawnIOInstall=%d\r\n",
         CornerToString(cfg.corner), cfg.offsetX, cfg.offsetY, cfg.monitor, cfg.fontScale, cfg.backgroundAlpha,
-        cfg.fixedValueWidth ? 1 : 0, cfg.lightTheme ? 1 : 0,
+        cfg.fixedValueWidth ? 1 : 0, ThemeToString(cfg.themeMode),
         cfg.updateIntervalMs, cfg.hotkey.c_str(), cfg.hideFromCapture ? 1 : 0,
         cfg.showFps ? 1 : 0, cfg.showFrameTime ? 1 : 0, cfg.showLowFps ? 1 : 0, cfg.showLow01Fps ? 1 : 0,
         cfg.showTime ? 1 : 0,

@@ -42,7 +42,7 @@ Windows 游戏性能小黑卡。默认在屏幕左上角用单行显示帧率、
 
 数值默认紧跟名称显示，间距更小；勾选「固定数值宽度」后会为每项预留宽度并右对齐，位数变化或暂时无数据时后面的模块不再移动，代价是名称与数值之间会留出空隙。更改字号会重新计算宽度。在“显示设置 → 指标名称颜色”中可逐项选色，也可全部恢复白色。名称默认白色；正常数值为白色，告警数值为红色，无数据为灰色，数值颜色不提供自定义。
 
-「浅色文字」会把名称和数值换成黑色，配合背景不透明度 0 可以做成不遮挡的透明样式，适合浅色游戏画面；自定义过的名称颜色保持不变。
+「主题」可选深色、浅色或跟随系统：深色是深色底板配白字，浅色是白色底板配黑字，跟随系统时按 Windows 应用主题自动切换，改系统主题后立即生效。底板透明度仍由「背景不透明度」控制，拉到 0 就是纯文字、不遮挡画面；自定义过的名称颜色保持不变。
 
 告警默认连续超标 3 秒才标红；恢复时需回到阈值安全侧一定幅度并持续 3 秒，避免临界值附近反复闪烁。温度的恢复幅度为 3℃，FPS / 利用率 / 内存 / 显存 / 功耗为 5 个单位，帧时间为 2ms，读写速率为 1MB/s；幅度最多为该项阈值的 25%。例如 CPU 温度阈值 90℃，降至 87℃ 并保持 3 秒后恢复白色。两段等待时间可在“告警阈值”页分别设为 0–10 秒，0 表示不等待。判定随刷新间隔进行，缺失数据、关闭单项或调整阈值会重新计时。
 
@@ -70,10 +70,10 @@ cmake --build build\vs2022-final --config Release --parallel 4
 
 # 安装包：需要 Inno Setup 6（winget install JRSoftware.InnoSetup）
 & "$env:LOCALAPPDATA\Programs\Inno Setup 6\ISCC.exe" installer\minihud.iss `
-  /DBuildDir=..\build\vs2022-final\Release /DAppVersion=1.0.2
+  /DBuildDir=..\build\vs2022-final\Release /DAppVersion=1.0.3
 ```
 
-生成的安装包在 `release\v1.0.2\MiniHUD-Setup.exe`，安装到 `%LocalAppData%\Programs\MiniHUD`。
+生成的安装包在 `release\v1.0.3\MiniHUD-Setup.exe`，安装到 `%LocalAppData%\Programs\MiniHUD`。
 
 ## 来源与许可
 

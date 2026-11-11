@@ -246,6 +246,7 @@ ImVec2 DrawStats(const Config& cfg, const SensorSnapshot& snap, ImVec2 pos, ImVe
     const float fontSize = ImGui::GetStyle().FontSizeBase * cfg.fontScale;
     if (hud.fontSize!=fontSize) { hud.valueWidths.fill(0); hud.fontSize=fontSize; }
     ImGui::PushFont(nullptr, fontSize);
+    ImGui::PushStyleColor(ImGuiCol_WindowBg, cfg.lightTheme ? ImVec4(1.0f,1.0f,1.0f,1.0f) : ImVec4(0.06f,0.06f,0.06f,1.0f));
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(9, 5));
     ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 0);
     ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0);
@@ -294,7 +295,7 @@ ImVec2 DrawStats(const Config& cfg, const SensorSnapshot& snap, ImVec2 pos, ImVe
         if (noticeVisible) ImGui::TextColored(valueColor,"%s",hud.notice.c_str());
         size = ImGui::GetWindowSize();
     }
-    ImGui::End(); ImGui::PopStyleVar(3); ImGui::PopFont();
+    ImGui::End(); ImGui::PopStyleVar(3); ImGui::PopStyleColor(); ImGui::PopFont();
     return size;
 }
 
@@ -387,8 +388,13 @@ UiAction DrawSettings(Config& cfg, const SensorSnapshot& snap, const std::vector
                 ImGui::SliderFloat("背景不透明度",&cfg.backgroundAlpha,0,1,"%.2f");
                 ImGui::Checkbox("固定数值宽度（数字变化时不跳动）",&cfg.fixedValueWidth);
                 ImGui::SetItemTooltip("关闭时数值紧跟名称，间距更小；开启时右侧对齐，后面的指标位置更稳定。");
-                ImGui::Checkbox("浅色文字（黑字，适合浅色背景）",&cfg.lightTheme);
-                ImGui::SetItemTooltip("配合背景不透明度 0 使用，变成不遮挡的黑色文字。默认白色的名称会自动变黑，自定义名称颜色保持不变。");
+                const char* themes[]={"深色","浅色","跟随系统"};
+                int theme=static_cast<int>(cfg.themeMode);
+                if (ImGui::Combo("主题", &theme, themes, 3)) {
+                    cfg.themeMode=static_cast<ThemeMode>(theme);
+                    cfg.lightTheme=EffectiveLightTheme(cfg.themeMode);
+                }
+                ImGui::SetItemTooltip("深色为白字，浅色为黑字；跟随系统时按 Windows 应用主题自动切换，改系统主题后立即生效。");
                 ImGui::Checkbox("使用华氏温度（告警阈值仍为摄氏度）",&cfg.fahrenheit);
                 ImGui::SeparatorText("行为");
                 bool startup=state.startup.enabled;

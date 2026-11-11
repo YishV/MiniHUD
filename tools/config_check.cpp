@@ -36,6 +36,7 @@ int main() {
     config.labelColors[static_cast<size_t>(Metric::GpuTemp)]=0x0123ABu;
     config.alertTriggerSeconds=1.5f; config.alertRecoverySeconds=4.5f;
     config.showLowFps=false; config.showLow01Fps=true;
+    config.themeMode=ThemeMode::Light;
     MoveMetric(config.metricOrder,static_cast<int>(Metric::GpuTemp),static_cast<int>(Metric::Fps));
     for (size_t i = 0; i < kMetricCount; ++i) config.alertLimits[i] = static_cast<float>(i) + .5f;
     check(SaveConfig(path, config), "save config");
@@ -45,6 +46,9 @@ int main() {
           "layout persists without repeated migration");
     check(!restored.alertsEnabled && restored.showRam, "toggles persist");
     check(restored.labelColors==config.labelColors,"RGB colors preserve leading zeroes and round-trip");
+    check(restored.themeMode==ThemeMode::Light,"theme choice round-trips");
+    check(EffectiveLightTheme(ThemeMode::Light) && !EffectiveLightTheme(ThemeMode::Dark),"effective theme resolution");
+    check(ParseTheme("system",ThemeMode::Dark)==ThemeMode::System,"theme names parse");
     check(restored.alertTriggerSeconds==1.5f && restored.alertRecoverySeconds==4.5f,"alert delays persist");
     check(restored.metricOrder==config.metricOrder && restored.metricOrder.front()==static_cast<int>(Metric::GpuTemp),"dragged metric order persists");
     check(restored.recordHotkey=="Alt+F9","record hotkey persists");
@@ -63,6 +67,11 @@ int main() {
     WritePrivateProfileStringW(L"Overlay", L"Corner", L"TopRight", path.c_str());
     Config legacy;
     check(LoadConfig(path, legacy) && legacy.corner == Corner::TopLeft && legacy.singleLine, "legacy migration");
+    DeleteFileW(path.c_str());
+    WritePrivateProfileStringW(L"Overlay", L"LightTheme", L"1", path.c_str());
+    Config legacyLight;
+    check(LoadConfig(path, legacyLight) && legacyLight.themeMode == ThemeMode::Light,
+          "old light-theme flag migrates to the theme setting");
     config.itemsPerRow = 99;
     config.alertLimits[0] = std::numeric_limits<float>::quiet_NaN();
     config.alertLimits[1] = -1;
