@@ -25,6 +25,11 @@ int main() {
     ImGui::NewFrame();
     const auto single = DrawStats(cfg,snap,ImVec2(12,12),ImVec2(0,0));
     ImGui::Render();
+    // Compact mode puts the value right after the label, so the panel is narrower than fixed-width mode.
+    Config fixedCfg=cfg; fixedCfg.fixedValueWidth=true;
+    ImGui::NewFrame(); DrawStats(fixedCfg,snap,ImVec2(12,12),ImVec2(0,0)); ImGui::Render();
+    ImGui::NewFrame(); const auto fixedWidthStats=DrawStats(fixedCfg,snap,ImVec2(12,12),ImVec2(0,0)); ImGui::Render();
+    const bool compactTighter=single.x<fixedWidthStats.x;
     cfg.singleLine=false; cfg.itemsPerRow=1;
     ImGui::NewFrame(); DrawStats(cfg,snap,ImVec2(12,12),ImVec2(0,0)); ImGui::Render();
     ImGui::NewFrame(); const auto multi=DrawStats(cfg,snap,ImVec2(12,12),ImVec2(0,0)); ImGui::Render();
@@ -46,6 +51,7 @@ int main() {
         for (const auto& vertex:list->VtxBuffer) if (vertex.col==IM_COL32(255,70,70,255)) recordingDot=true;
     snap.recording=false;
     Config colored;
+    colored.fixedValueWidth=true; // the width-stability checks below exercise the fixed-width mode
     colored.showFps=false; colored.showGpuTemp=false; colored.showVram=false;
     colored.labelColors[static_cast<size_t>(Metric::CpuTemp)]=0x00FF00u;
     colored.alertTriggerSeconds=0; colored.alertRecoverySeconds=0;
@@ -65,6 +71,10 @@ int main() {
     snap.cpuTemp=75.0f;
     draw();
     const bool independentColor=hasColor(IM_COL32(0,255,0,255)) && hasColor(IM_COL32(245,245,245,255)) && !hasColor(IM_COL32(255,89,77,255));
+    // Light theme draws near-black text (labels and values) instead of white.
+    Config lightCfg; lightCfg.lightTheme=true;
+    ImGui::NewFrame(); DrawStats(lightCfg,snap,ImVec2(0,0),ImVec2(0,0)); ImGui::Render();
+    const bool lightText=hasColor(IM_COL32(15,15,15,255)) && !hasColor(IM_COL32(245,245,245,255));
     snap.cpuTemp=99.0f;
     const auto twoDigits=draw();
     const bool redValue=hasColor(ImGui::ColorConvertFloat4ToU32(ImVec4(1,.35f,.3f,1))) && hasColor(IM_COL32(0,255,0,255));
@@ -88,12 +98,13 @@ int main() {
     const bool missingOk=missing==UiAction::None;
     const ImVec2 centerPivot=CornerPivot(Corner::TopCenter);
     const bool pivotOk=centerPivot.x==0.5f && centerPivot.y==0.0f;
-    const bool ok=independentColor && redValue && fixedWidth && noticeLayout && recordingDot && missingOk && pivotOk && englishOk && spacingOk && chineseGlyph && single.x>100 && single.x<1920 && single.y<50 && multi.y>single.y*2 && ImGui::GetDrawData()->TotalVtxCount>0;
+    const bool ok=independentColor && lightText && redValue && fixedWidth && noticeLayout && recordingDot && missingOk && pivotOk && compactTighter && englishOk && spacingOk && chineseGlyph && single.x>100 && single.x<1920 && single.y<50 && multi.y>single.y*2 && ImGui::GetDrawData()->TotalVtxCount>0;
     std::printf("Label/value colors: %s; alert retains label color: %s\n",independentColor?"PASSED":"FAILED",redValue?"PASSED":"FAILED");
     std::printf("Fixed value width: %s; notice layout restores: %s\n",fixedWidth?"PASSED":"FAILED",noticeLayout?"PASSED":"FAILED");
     std::printf("Recording indicator: %s\n",recordingDot?"PASSED":"FAILED");
     std::printf("Driver-missing settings layout: %s\n",missingOk?"PASSED":"FAILED");
     std::printf("Top-center pivot: %s\n",pivotOk?"PASSED":"FAILED");
+    std::printf("Compact value gap: %s; light theme: %s\n",compactTighter?"PASSED":"FAILED",lightText?"PASSED":"FAILED");
     std::printf("Chinese UI geometry: %s; single %.0fx%.0f; multi %.0fx%.0f\n",ok?"PASSED":"FAILED",single.x,single.y,multi.x,multi.y);
     std::printf("English metric style: %s; %.0fx%.0f\n",englishOk?"PASSED":"FAILED",english.x,english.y);
     ImGui::DestroyContext();

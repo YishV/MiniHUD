@@ -1,4 +1,4 @@
-﻿; MiniHUD installer (Inno Setup 6).
+; MiniHUD installer (Inno Setup 6).
 ;
 ; Build the app first, then:
 ;   ISCC.exe installer\minihud.iss /DBuildDir=..\build\vs2022-final\Release /DAppVersion=1.0.1
@@ -8,7 +8,7 @@
 
 #define MyAppName "MiniHUD"
 #ifndef AppVersion
-  #define AppVersion "1.0.1"
+  #define AppVersion "1.0.2"
 #endif
 #ifndef BuildDir
   #define BuildDir "..\build\vs2022-final\Release"
@@ -31,6 +31,10 @@ VersionInfoVersion={#AppVersion}.0
 VersionInfoCompany={#MyAppPublisher}
 VersionInfoDescription={#MyAppName} 安装程序
 DefaultDirName={localappdata}\Programs\{#MyAppName}
+; MiniHUD holds this mutex while running. Setup runs unelevated, so it cannot close an elevated
+; MiniHUD by itself: with this directive it asks the user to exit it first instead of failing on
+; a locked MiniHUD.exe.
+AppMutex=Local\MiniHUDOverlaySingleInstance
 DefaultGroupName={#MyAppName}
 DisableProgramGroupPage=yes
 PrivilegesRequired=lowest

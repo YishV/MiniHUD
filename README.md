@@ -6,7 +6,7 @@ Windows 游戏性能小黑卡。默认在屏幕左上角用单行显示帧率、
 
 [下载 Windows 安装包](https://github.com/YishV/MiniHUD/releases/latest/download/MiniHUD-Setup.exe) · [查看所有版本](https://github.com/YishV/MiniHUD/releases)
 
-安装包按当前用户装到 `%LocalAppData%\Programs\MiniHUD`，不需要管理员权限即可安装；会创建开始菜单快捷方式和可选的桌面图标，可在「设置 → 应用」里卸载。安装完成后启动 MiniHUD 时仍需同意 Windows 管理员提示。喜欢绿色的可在发布页下载 `MiniHUD-v*-win-x64.zip`，解压后放到固定目录运行；发布页同时提供 SHA-256 校验文件。
+安装包按当前用户装到 `%LocalAppData%\Programs\MiniHUD`，不需要管理员权限即可安装；会创建开始菜单快捷方式和可选的桌面图标，可在「设置 → 应用」里卸载。安装完成后启动 MiniHUD 时仍需同意 Windows 管理员提示。升级前请先从托盘退出 MiniHUD：它以管理员权限运行，安装器无法自动关闭，检测到运行中会提示你先退出。喜欢绿色的可在发布页下载 `MiniHUD-v*-win-x64.zip`，解压后放到固定目录运行；发布页同时提供 SHA-256 校验文件。
 
 ![MiniHUD 猫咪图标](resources/cat-preview.png)
 
@@ -40,7 +40,9 @@ Windows 游戏性能小黑卡。默认在屏幕左上角用单行显示帧率、
 
 单行放不下屏幕时自动换行。屏幕位置可选左上、右上、左下、右下或顶部居中；居中时水平边距仍然生效。旧版配置首次加载时迁移到左上角单行，之后保留用户选择。不包含网络延迟功能。
 
-数值使用预留宽度并右对齐，位数变化或暂时无数据时，后面的模块位置保持稳定；超出预留范围时只扩宽不收缩。更改字号会重新计算宽度。在“显示设置 → 指标名称颜色”中可逐项选色，也可全部恢复白色。名称默认白色；正常数值为白色，告警数值为红色，无数据为灰色，数值颜色不提供自定义。
+数值默认紧跟名称显示，间距更小；勾选「固定数值宽度」后会为每项预留宽度并右对齐，位数变化或暂时无数据时后面的模块不再移动，代价是名称与数值之间会留出空隙。更改字号会重新计算宽度。在“显示设置 → 指标名称颜色”中可逐项选色，也可全部恢复白色。名称默认白色；正常数值为白色，告警数值为红色，无数据为灰色，数值颜色不提供自定义。
+
+「浅色文字」会把名称和数值换成黑色，配合背景不透明度 0 可以做成不遮挡的透明样式，适合浅色游戏画面；自定义过的名称颜色保持不变。
 
 告警默认连续超标 3 秒才标红；恢复时需回到阈值安全侧一定幅度并持续 3 秒，避免临界值附近反复闪烁。温度的恢复幅度为 3℃，FPS / 利用率 / 内存 / 显存 / 功耗为 5 个单位，帧时间为 2ms，读写速率为 1MB/s；幅度最多为该项阈值的 25%。例如 CPU 温度阈值 90℃，降至 87℃ 并保持 3 秒后恢复白色。两段等待时间可在“告警阈值”页分别设为 0–10 秒，0 表示不等待。判定随刷新间隔进行，缺失数据、关闭单项或调整阈值会重新计时。
 
@@ -68,10 +70,10 @@ cmake --build build\vs2022-final --config Release --parallel 4
 
 # 安装包：需要 Inno Setup 6（winget install JRSoftware.InnoSetup）
 & "$env:LOCALAPPDATA\Programs\Inno Setup 6\ISCC.exe" installer\minihud.iss `
-  /DBuildDir=..\build\vs2022-final\Release /DAppVersion=1.0.1
+  /DBuildDir=..\build\vs2022-final\Release /DAppVersion=1.0.2
 ```
 
-生成的安装包在 `release\v1.0.1\MiniHUD-Setup.exe`，安装到 `%LocalAppData%\Programs\MiniHUD`。
+生成的安装包在 `release\v1.0.2\MiniHUD-Setup.exe`，安装到 `%LocalAppData%\Programs\MiniHUD`。
 
 ## 来源与许可
 

@@ -35,6 +35,8 @@ struct Config {
     int monitor = 0;              // 0 = primary, then the remaining monitors in enumeration order
     float fontScale = 1.0f;
     float backgroundAlpha = 0.92f;
+    bool fixedValueWidth = false; // reserve the widest sample per value (stable, but wider gaps)
+    bool lightTheme = false;      // black text, for a transparent overlay over light backgrounds
     int updateIntervalMs = 500;
     std::string hotkey = "Ctrl+Shift+F12";
     std::string recordHotkey = "Ctrl+Shift+F11";

@@ -179,6 +179,10 @@ ImVec2 DrawStats(const Config& cfg, const SensorSnapshot& snap, ImVec2 pos, ImVe
     static HudRuntime fallback;
     HudRuntime& hud=runtime ? *runtime : fallback;
     const double now=double(Qpc())/double(QpcFrequency());
+    // Light theme: dark text for a transparent overlay over light backgrounds.
+    const ImVec4 valueColor = cfg.lightTheme ? ImVec4(0.06f,0.06f,0.06f,1) : kValueColor;
+    const ImVec4 missingColor = cfg.lightTheme ? ImVec4(0.42f,0.42f,0.42f,1) : kMissingColor;
+    const ImVec4 hotColor = cfg.lightTheme ? ImVec4(0.78f,0.08f,0.08f,1) : kHotColor;
     std::vector<HudItem> items;
     auto add = [&](Metric metric, const std::optional<float>& value, const char* format) {
         const size_t index = static_cast<size_t>(metric);
@@ -188,7 +192,7 @@ ImVec2 DrawStats(const Config& cfg, const SensorSnapshot& snap, ImVec2 pos, ImVe
         const bool hot=hud.alerts[index].Update(metric,value,cfg.alertLimits[index],cfg.alertsEnabled,now,
             cfg.alertTriggerSeconds,cfg.alertRecoverySeconds);
         items.push_back({static_cast<int>(index), cfg.englishMetrics ? englishLabels[index] : metricLabels[index], text,
-            !value ? kMissingColor : hot ? kHotColor : kValueColor});
+            !value ? missingColor : hot ? hotColor : valueColor});
     };
     auto temp = [&](Metric metric, const std::optional<float>& value) {
         add(metric, value, "%.0f C");
@@ -229,7 +233,7 @@ ImVec2 DrawStats(const Config& cfg, const SensorSnapshot& snap, ImVec2 pos, ImVe
     if (cfg.showTime) {
         const size_t index = static_cast<size_t>(Metric::Time);
         items.push_back({static_cast<int>(index), cfg.englishMetrics ? englishLabels[index] : metricLabels[index],
-                         snap.clockText.empty() ? "--:--" : snap.clockText, kValueColor});
+                         snap.clockText.empty() ? "--:--" : snap.clockText, valueColor});
     }
     std::array<bool,kMetricCount> visible{};
     for (const auto& item:items) visible[item.id]=true;
@@ -264,15 +268,22 @@ ImVec2 DrawStats(const Config& cfg, const SensorSnapshot& snap, ImVec2 pos, ImVe
             const float labelWidth=ImGui::CalcTextSize(item.label.c_str()).x;
             const float textWidth=ImGui::CalcTextSize(item.text.c_str()).x;
             float& valueWidth=hud.valueWidths[item.id];
-            valueWidth=std::max({valueWidth,textWidth,ImGui::CalcTextSize(ValueWidthSample(static_cast<Metric>(item.id),cfg.fahrenheit)).x});
-            const float itemWidth=labelWidth+7+valueWidth;
+            if (cfg.fixedValueWidth)
+                valueWidth=std::max({valueWidth,textWidth,ImGui::CalcTextSize(ValueWidthSample(static_cast<Metric>(item.id),cfg.fahrenheit)).x});
+            // Compact (default) puts the value right after the label; fixed width right-aligns it in a
+            // reserved slot, which keeps trailing modules from moving but leaves a visible gap.
+            const float slot=cfg.fixedValueWidth ? valueWidth : textWidth;
+            const float itemWidth=labelWidth+7+slot;
             if (col && ((!cfg.singleLine && col >= cfg.itemsPerRow) || x + itemWidth > available)) {
                 width = std::max(width, x - cfg.moduleGap); x = 0; ++row; col = 0;
             }
             ImGui::SetCursorPos(ImVec2(start.x + x, start.y + row * height));
             const auto rgb=cfg.labelColors[item.id];
-            ImGui::TextColored(ImVec4(((rgb>>16)&255)/255.0f,((rgb>>8)&255)/255.0f,(rgb&255)/255.0f,1), "%s", item.label.c_str());
-            ImGui::SetCursorPos(ImVec2(start.x+x+labelWidth+7+valueWidth-textWidth,start.y+row*height));
+            const ImVec4 labelColor = cfg.lightTheme && rgb==0xFFFFFFu
+                ? ImVec4(0.06f,0.06f,0.06f,1)
+                : ImVec4(((rgb>>16)&255)/255.0f,((rgb>>8)&255)/255.0f,(rgb&255)/255.0f,1);
+            ImGui::TextColored(labelColor, "%s", item.label.c_str());
+            ImGui::SetCursorPos(ImVec2(start.x+x+labelWidth+7+slot-textWidth,start.y+row*height));
             ImGui::TextColored(item.color, "%s", item.text.c_str());
             x += itemWidth + cfg.moduleGap; ++col;
         }
@@ -280,7 +291,7 @@ ImVec2 DrawStats(const Config& cfg, const SensorSnapshot& snap, ImVec2 pos, ImVe
         ImGui::SetCursorPos(start);
         ImGui::Dummy(ImVec2(width, items.empty() && !snap.recording ? 0 : (row + 1) * height - cfg.rowGap));
         if (cfg.showFrameGraph) DrawFrameGraph(snap, width);
-        if (noticeVisible) ImGui::TextColored(kValueColor,"%s",hud.notice.c_str());
+        if (noticeVisible) ImGui::TextColored(valueColor,"%s",hud.notice.c_str());
         size = ImGui::GetWindowSize();
     }
     ImGui::End(); ImGui::PopStyleVar(3); ImGui::PopFont();
@@ -374,6 +385,10 @@ UiAction DrawSettings(Config& cfg, const SensorSnapshot& snap, const std::vector
                 if (ImGui::Button("紧贴屏幕边缘")) { cfg.offsetX=0; cfg.offsetY=0; }
                 ImGui::SliderFloat("字体大小",&cfg.fontScale,kMinFontScale,kMaxFontScale,"%.2fx");
                 ImGui::SliderFloat("背景不透明度",&cfg.backgroundAlpha,0,1,"%.2f");
+                ImGui::Checkbox("固定数值宽度（数字变化时不跳动）",&cfg.fixedValueWidth);
+                ImGui::SetItemTooltip("关闭时数值紧跟名称，间距更小；开启时右侧对齐，后面的指标位置更稳定。");
+                ImGui::Checkbox("浅色文字（黑字，适合浅色背景）",&cfg.lightTheme);
+                ImGui::SetItemTooltip("配合背景不透明度 0 使用，变成不遮挡的黑色文字。默认白色的名称会自动变黑，自定义名称颜色保持不变。");
                 ImGui::Checkbox("使用华氏温度（告警阈值仍为摄氏度）",&cfg.fahrenheit);
                 ImGui::SeparatorText("行为");
                 bool startup=state.startup.enabled;

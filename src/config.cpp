@@ -138,6 +138,8 @@ bool LoadConfig(const std::wstring& path, Config& cfg) {
     cfg.monitor = ReadInt(path, ov, L"Monitor", cfg.monitor);
     cfg.fontScale = ReadFloat(path, ov, L"FontScale", cfg.fontScale);
     cfg.backgroundAlpha = ReadFloat(path, ov, L"BackgroundAlpha", cfg.backgroundAlpha);
+    cfg.fixedValueWidth = ReadBool(path, ov, L"FixedValueWidth", cfg.fixedValueWidth);
+    cfg.lightTheme = ReadBool(path, ov, L"LightTheme", cfg.lightTheme);
     cfg.updateIntervalMs = ReadInt(path, ov, L"UpdateIntervalMs", cfg.updateIntervalMs);
     cfg.hotkey = ReadString(path, ov, L"Hotkey", cfg.hotkey);
     cfg.recordHotkey = ReadString(path,ov,L"RecordHotkey",cfg.recordHotkey);
@@ -212,6 +214,10 @@ bool SaveConfig(const std::wstring& path, const Config& cfg) {
         "Monitor=%d\r\n"
         "FontScale=%.2f\r\n"
         "BackgroundAlpha=%.2f\r\n"
+        "; 1 = reserve a fixed width per value (stable, but wider gaps)\r\n"
+        "FixedValueWidth=%d\r\n"
+        "; 1 = dark text, for a transparent overlay over light backgrounds\r\n"
+        "LightTheme=%d\r\n"
         "UpdateIntervalMs=%d\r\n"
         "; Modifiers: Ctrl, Shift, Alt, Win. Keys: F1-F24, A-Z, 0-9, Insert, Delete, Home, End, PageUp, PageDown, Pause, ScrollLock\r\n"
         "Hotkey=%s\r\n"
@@ -253,6 +259,7 @@ bool SaveConfig(const std::wstring& path, const Config& cfg) {
         "; 1 = offer to download and install the PawnIO driver (needed for CPU temperature and power) on startup\r\n"
         "OfferPawnIOInstall=%d\r\n",
         CornerToString(cfg.corner), cfg.offsetX, cfg.offsetY, cfg.monitor, cfg.fontScale, cfg.backgroundAlpha,
+        cfg.fixedValueWidth ? 1 : 0, cfg.lightTheme ? 1 : 0,
         cfg.updateIntervalMs, cfg.hotkey.c_str(), cfg.hideFromCapture ? 1 : 0,
         cfg.showFps ? 1 : 0, cfg.showFrameTime ? 1 : 0, cfg.showLowFps ? 1 : 0, cfg.showLow01Fps ? 1 : 0,
         cfg.showTime ? 1 : 0,
