@@ -146,6 +146,7 @@ ImVec2 CornerPivot(Corner c) {
     case Corner::TopRight: return {1.0f, 0.0f};
     case Corner::BottomLeft: return {0.0f, 1.0f};
     case Corner::BottomRight: return {1.0f, 1.0f};
+    case Corner::TopCenter: return {0.5f, 0.0f};
     }
     return {1.0f, 0.0f};
 }
@@ -154,13 +155,13 @@ namespace {
 struct HudItem { int id; std::string label, text; ImVec4 color; };
 const char* const metricLabels[] = {"帧率", "帧时间", "CPU 占用", "CPU 温度", "GPU 占用", "GPU 温度",
     "CPU 功耗", "GPU 功耗", "显存", "内存", "SSD 温度", "磁盘读取", "磁盘写入", "下载", "上传",
-    "1% 低帧", "0.1% 低帧"};
+    "1% 低帧", "0.1% 低帧", "时间"};
 const char* const englishLabels[] = {"FPS", "Frame Time", "CPU Load", "CPU Temp", "GPU Load", "GPU Temp",
     "CPU Power", "GPU Power", "VRAM", "RAM", "SSD Temp", "Disk Read", "Disk Write", "Down", "Up",
-    "1% Low", "0.1% Low"};
+    "1% Low", "0.1% Low", "Time"};
 const char* const metricUnits[] = {"低于 FPS", "达到 ms", "达到 %", "达到 ℃", "达到 %", "达到 ℃",
     "达到 W", "达到 W", "达到 %", "达到 %", "达到 ℃", "达到 MB/s", "达到 MB/s", "达到 MB/s", "达到 MB/s",
-    "低于 FPS", "低于 FPS"};
+    "低于 FPS", "低于 FPS", ""};
 std::string StatusText(const std::string& text) {
     if (text.find("not installed") != std::string::npos) return "未安装 PawnIO 驱动";
     if (text.find("access denied") != std::string::npos) return "权限不足，请以管理员身份运行";
@@ -224,6 +225,11 @@ ImVec2 DrawStats(const Config& cfg, const SensorSnapshot& snap, ImVec2 pos, ImVe
     if (cfg.showNetworkSpeed) {
         add(Metric::NetDown, snap.networkDownMBps, "%.1f MB/s");
         add(Metric::NetUp, snap.networkUpMBps, "%.1f MB/s");
+    }
+    if (cfg.showTime) {
+        const size_t index = static_cast<size_t>(Metric::Time);
+        items.push_back({static_cast<int>(index), cfg.englishMetrics ? englishLabels[index] : metricLabels[index],
+                         snap.clockText.empty() ? "--:--" : snap.clockText, kValueColor});
     }
     std::array<bool,kMetricCount> visible{};
     for (const auto& item:items) visible[item.id]=true;
@@ -300,6 +306,8 @@ UiAction DrawSettings(Config& cfg, const SensorSnapshot& snap, const std::vector
                     ImGui::TableNextColumn(); ImGui::Checkbox("1% 低帧", &cfg.showLowFps);
                     ImGui::TableNextColumn(); ImGui::Checkbox("0.1% 低帧", &cfg.showLow01Fps);
                     ImGui::SetItemTooltip("最近 60 秒里最慢的 1% 和 0.1% 帧对应的帧率，越低说明卡顿越重。");
+                    ImGui::TableNextColumn(); ImGui::Checkbox("显示时间",&cfg.showTime);
+                    ImGui::SetItemTooltip("在卡片上显示本地时间（时:分）。");
                     ImGui::TableNextColumn(); ImGui::Checkbox("磁盘读写速度", &cfg.showDiskSpeed);
                     ImGui::TableNextColumn(); ImGui::Checkbox("网络上传 / 下载", &cfg.showNetworkSpeed);
                     ImGui::TableNextColumn(); ImGui::Checkbox("帧时间曲线", &cfg.showFrameGraph);
@@ -352,9 +360,9 @@ UiAction DrawSettings(Config& cfg, const SensorSnapshot& snap, const std::vector
                     if (ImGui::Button("恢复指标顺序")) cfg.metricOrder=kDefaultMetricOrder;
                     ImGui::TreePop();
                 }
-                const char* corners[] = {"左上角","右上角","左下角","右下角"};
+                const char* corners[] = {"左上角","右上角","左下角","右下角","顶部居中"};
                 int corner = static_cast<int>(cfg.corner);
-                if (ImGui::Combo("屏幕位置", &corner, corners, 4)) cfg.corner = static_cast<Corner>(corner);
+                if (ImGui::Combo("屏幕位置", &corner, corners, 5)) cfg.corner = static_cast<Corner>(corner);
                 const std::string current = cfg.monitor < static_cast<int>(monitors.size()) ? monitors[cfg.monitor].label : "显示器未连接";
                 if (ImGui::BeginCombo("显示器",current.c_str())) {
                     for (int i=0;i<static_cast<int>(monitors.size());++i)
@@ -406,6 +414,7 @@ UiAction DrawSettings(Config& cfg, const SensorSnapshot& snap, const std::vector
                 ImGui::SliderFloat("恢复等待时间",&cfg.alertRecoverySeconds,0,10,"%.1f 秒");
                 ImGui::TextWrapped("默认连续超标 3 秒才标红。恢复需回落一定幅度并持续 3 秒，例如温度 90℃ 告警后，降至 87℃ 才开始计时。时间设为 0 可立即切换；检查随刷新间隔进行。");
                 for (size_t i=0;i<kMetricCount;++i) {
+                    if (static_cast<Metric>(i)==Metric::Time) continue; // clock has no threshold
                     ImGui::PushID(static_cast<int>(i));
                     ImGui::SetNextItemWidth(120);
                     ImGui::InputFloat(metricLabels[i],&cfg.alertLimits[i],1,5,"%.1f");

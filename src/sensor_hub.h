@@ -24,6 +24,7 @@ struct SensorSnapshot {
     std::optional<float> frameTimeMs;
     std::optional<float> fpsLow1;   // FPS at the slowest 1% of the last kLowFpsWindowSeconds
     std::optional<float> fpsLow01;  // ... and the slowest 0.1%
+    std::string clockText;          // local time, HH:MM
     std::optional<float> cpuUsage;
     std::optional<float> cpuTemp;
     std::optional<float> gpuUsage;

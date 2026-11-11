@@ -86,11 +86,14 @@ int main() {
     snap.cpuNeedsDriver=true;
     ImGui::NewFrame(); const UiAction missing=DrawSettings(cfg,snap,{},state); ImGui::Render();
     const bool missingOk=missing==UiAction::None;
-    const bool ok=independentColor && redValue && fixedWidth && noticeLayout && recordingDot && missingOk && englishOk && spacingOk && chineseGlyph && single.x>100 && single.x<1920 && single.y<50 && multi.y>single.y*2 && ImGui::GetDrawData()->TotalVtxCount>0;
+    const ImVec2 centerPivot=CornerPivot(Corner::TopCenter);
+    const bool pivotOk=centerPivot.x==0.5f && centerPivot.y==0.0f;
+    const bool ok=independentColor && redValue && fixedWidth && noticeLayout && recordingDot && missingOk && pivotOk && englishOk && spacingOk && chineseGlyph && single.x>100 && single.x<1920 && single.y<50 && multi.y>single.y*2 && ImGui::GetDrawData()->TotalVtxCount>0;
     std::printf("Label/value colors: %s; alert retains label color: %s\n",independentColor?"PASSED":"FAILED",redValue?"PASSED":"FAILED");
     std::printf("Fixed value width: %s; notice layout restores: %s\n",fixedWidth?"PASSED":"FAILED",noticeLayout?"PASSED":"FAILED");
     std::printf("Recording indicator: %s\n",recordingDot?"PASSED":"FAILED");
     std::printf("Driver-missing settings layout: %s\n",missingOk?"PASSED":"FAILED");
+    std::printf("Top-center pivot: %s\n",pivotOk?"PASSED":"FAILED");
     std::printf("Chinese UI geometry: %s; single %.0fx%.0f; multi %.0fx%.0f\n",ok?"PASSED":"FAILED",single.x,single.y,multi.x,multi.y);
     std::printf("English metric style: %s; %.0fx%.0f\n",englishOk?"PASSED":"FAILED",english.x,english.y);
     ImGui::DestroyContext();

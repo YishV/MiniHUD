@@ -5,7 +5,7 @@
 #include <string>
 #include "metric_rules.h"
 
-enum class Corner { TopLeft = 0, TopRight, BottomLeft, BottomRight };
+enum class Corner { TopLeft = 0, TopRight, BottomLeft, BottomRight, TopCenter };
 
 // Value ranges enforced by Config::Clamp, which are also the ranges of the settings panel controls.
 constexpr int kMaxOffset = 4000;
@@ -46,6 +46,7 @@ struct Config {
     bool showFrameTime = false;
     bool showLowFps = false; // 1% low FPS
     bool showLow01Fps = false;
+    bool showTime = true; // clock in HH:MM
     bool showCpuUsage = false;
     bool showCpuTemp = true;
     bool showGpuUsage = false;

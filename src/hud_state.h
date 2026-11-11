@@ -54,6 +54,7 @@ inline const char* ValueWidthSample(Metric metric,bool fahrenheit) {
     case Metric::CpuPower: case Metric::GpuPower: return "999 W";
     case Metric::Ram: case Metric::Vram: return "00.0 / 00.0 GB";
     case Metric::DiskRead: case Metric::DiskWrite: return "0000.0 MB/s";
+    case Metric::Time: return "00:00";
     default: return "000.0 MB/s";
     }
 }

@@ -1,4 +1,4 @@
-﻿# MiniHUD
+# MiniHUD
 
 Windows 游戏性能小黑卡。默认在屏幕左上角用单行显示帧率、CPU 温度、GPU 温度和显存已用/总量，1% / 0.1% 低帧可分别开启。卡片无边框、点击穿透，优先支持无边框窗口游戏；不向游戏进程注入代码。
 
@@ -20,6 +20,7 @@ Windows 游戏性能小黑卡。默认在屏幕左上角用单行显示帧率、
 |---|---|---|
 | FPS | Windows ETW | 开 |
 | 1% / 0.1% 低帧 | 最近最多 60 秒逐帧数据，最慢 1% / 0.1% 帧的平均帧率 | 关 |
+| 时间 | 本机时钟，格式为 时:分 | 开 |
 | CPU 温度 | 已安装的 PawnIO 驱动；Intel 路径仍为实验性 | 开 |
 | GPU 温度、显存 | NVIDIA NVML、AMD ADL 或 Windows 回退源 | 开 |
 | RAM 已用/总量 | Windows 内存 API | 关 |
@@ -37,7 +38,7 @@ Windows 游戏性能小黑卡。默认在屏幕左上角用单行显示帧率、
 
 默认 FPS 低于 45、帧时间达到 33.3 ms、CPU 占用达到 95%、CPU 温度达到 90℃、GPU 温度达到 85℃、SSD 温度达到 70℃、内存/显存占用达到 90% 时，数值变为红色。GPU 利用率、功耗与读写速度没有通用异常上限，默认不告警，可自行设置。阈值填 0 关闭单项告警，也可关闭全部告警；无数据不会误报。温度阈值始终使用摄氏度。
 
-单行放不下屏幕时自动换行。旧版配置首次加载时迁移到左上角单行，之后保留用户选择。不包含网络延迟功能。
+单行放不下屏幕时自动换行。屏幕位置可选左上、右上、左下、右下或顶部居中；居中时水平边距仍然生效。旧版配置首次加载时迁移到左上角单行，之后保留用户选择。不包含网络延迟功能。
 
 数值使用预留宽度并右对齐，位数变化或暂时无数据时，后面的模块位置保持稳定；超出预留范围时只扩宽不收缩。更改字号会重新计算宽度。在“显示设置 → 指标名称颜色”中可逐项选色，也可全部恢复白色。名称默认白色；正常数值为白色，告警数值为红色，无数据为灰色，数值颜色不提供自定义。
 
@@ -67,10 +68,10 @@ cmake --build build\vs2022-final --config Release --parallel 4
 
 # 安装包：需要 Inno Setup 6（winget install JRSoftware.InnoSetup）
 & "$env:LOCALAPPDATA\Programs\Inno Setup 6\ISCC.exe" installer\minihud.iss `
-  /DBuildDir=..\build\vs2022-final\Release /DAppVersion=1.0
+  /DBuildDir=..\build\vs2022-final\Release /DAppVersion=1.0.1
 ```
 
-生成的安装包在 `release\v1.0\MiniHUD-Setup.exe`，安装到 `%LocalAppData%\Programs\MiniHUD`。
+生成的安装包在 `release\v1.0.1\MiniHUD-Setup.exe`，安装到 `%LocalAppData%\Programs\MiniHUD`。
 
 ## 来源与许可
 

@@ -1,14 +1,14 @@
 ﻿; MiniHUD installer (Inno Setup 6).
 ;
 ; Build the app first, then:
-;   ISCC.exe installer\minihud.iss /DBuildDir=..\build\vs2022-final\Release /DAppVersion=0.1.3
+;   ISCC.exe installer\minihud.iss /DBuildDir=..\build\vs2022-final\Release /DAppVersion=1.0.1
 ;
 ; The install is per-user (no UAC during setup); MiniHUD.exe itself still asks for
 ; administrator rights when it starts, because ETW and the PawnIO driver need them.
 
 #define MyAppName "MiniHUD"
 #ifndef AppVersion
-  #define AppVersion "1.0"
+  #define AppVersion "1.0.1"
 #endif
 #ifndef BuildDir
   #define BuildDir "..\build\vs2022-final\Release"
@@ -27,7 +27,7 @@ AppPublisher={#MyAppPublisher}
 AppPublisherURL={#MyAppURL}
 AppSupportURL={#MyAppURL}
 AppUpdatesURL={#MyAppURL}/releases
-VersionInfoVersion=1.0.0.0
+VersionInfoVersion={#AppVersion}.0
 VersionInfoCompany={#MyAppPublisher}
 VersionInfoDescription={#MyAppName} 安装程序
 DefaultDirName={localappdata}\Programs\{#MyAppName}

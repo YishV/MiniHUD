@@ -16,6 +16,7 @@
 #include <algorithm>
 #include <chrono>
 #include <cmath>
+#include <cstdio>
 #include <memory>
 
 namespace {
@@ -241,6 +242,13 @@ void SensorHub::Run() {
 
         lastPoll = now;
         SensorSnapshot s;
+        {
+            SYSTEMTIME local{};
+            GetLocalTime(&local);
+            char clock[16];
+            std::snprintf(clock, sizeof(clock), "%02u:%02u", local.wHour, local.wMinute);
+            s.clockText = clock;
+        }
         const uint32_t turnedOn = mask & ~prevMask;
         prevMask = mask;
 

@@ -54,6 +54,7 @@ Corner ParseCorner(const std::string& s, Corner def) {
     if (l == "topright") return Corner::TopRight;
     if (l == "bottomleft") return Corner::BottomLeft;
     if (l == "bottomright") return Corner::BottomRight;
+    if (l == "topcenter") return Corner::TopCenter;
     return def;
 }
 
@@ -122,6 +123,7 @@ const char* CornerToString(Corner c) {
     case Corner::TopRight: return "TopRight";
     case Corner::BottomLeft: return "BottomLeft";
     case Corner::BottomRight: return "BottomRight";
+    case Corner::TopCenter: return "TopCenter";
     }
     return "TopRight";
 }
@@ -171,6 +173,7 @@ bool LoadConfig(const std::wstring& path, Config& cfg) {
     cfg.showFrameTime = ReadBool(path, me, L"ShowFrameTime", cfg.showFrameTime);
     cfg.showLowFps = ReadBool(path, me, L"ShowLowFps", cfg.showLowFps);
     cfg.showLow01Fps = ReadBool(path, me, L"ShowLow01Fps", cfg.showLowFps); // migrate the old combined switch
+    cfg.showTime = ReadBool(path, me, L"ShowTime", cfg.showTime);
     cfg.showCpuUsage = ReadBool(path, me, L"ShowCpuUsage", cfg.showCpuUsage);
     cfg.showCpuTemp = ReadBool(path, me, L"ShowCpuTemp", cfg.showCpuTemp);
     cfg.showGpuUsage = ReadBool(path, me, L"ShowGpuUsage", cfg.showGpuUsage);
@@ -201,7 +204,7 @@ bool SaveConfig(const std::wstring& path, const Config& cfg) {
         "; MiniHUD configuration. Open settings from the tray icon; hotkey toggles the HUD.\r\n"
         "\r\n"
         "[Overlay]\r\n"
-        "; TopLeft | TopRight | BottomLeft | BottomRight\r\n"
+        "; TopLeft | TopRight | BottomLeft | BottomRight | TopCenter\r\n"
         "Corner=%s\r\n"
         "OffsetX=%d\r\n"
         "OffsetY=%d\r\n"
@@ -220,6 +223,9 @@ bool SaveConfig(const std::wstring& path, const Config& cfg) {
         "ShowFrameTime=%d\r\n"
         "; 1 = low percentile FPS (slowest 1 and 0.1 percent of frames, last 60 s)\r\n"
         "ShowLowFps=%d\r\n"
+        "ShowLow01Fps=%d\r\n"
+        "; 1 = clock in HH:MM\r\n"
+        "ShowTime=%d\r\n"
         "ShowCpuUsage=%d\r\n"
         "ShowCpuTemp=%d\r\n"
         "ShowGpuUsage=%d\r\n"
@@ -248,7 +254,8 @@ bool SaveConfig(const std::wstring& path, const Config& cfg) {
         "OfferPawnIOInstall=%d\r\n",
         CornerToString(cfg.corner), cfg.offsetX, cfg.offsetY, cfg.monitor, cfg.fontScale, cfg.backgroundAlpha,
         cfg.updateIntervalMs, cfg.hotkey.c_str(), cfg.hideFromCapture ? 1 : 0,
-        cfg.showFps ? 1 : 0, cfg.showFrameTime ? 1 : 0, cfg.showLowFps ? 1 : 0,
+        cfg.showFps ? 1 : 0, cfg.showFrameTime ? 1 : 0, cfg.showLowFps ? 1 : 0, cfg.showLow01Fps ? 1 : 0,
+        cfg.showTime ? 1 : 0,
         cfg.showCpuUsage ? 1 : 0, cfg.showCpuTemp ? 1 : 0,
         cfg.showGpuUsage ? 1 : 0, cfg.showGpuTemp ? 1 : 0, cfg.showCpuPower ? 1 : 0, cfg.showGpuPower ? 1 : 0,
         cfg.showVram ? 1 : 0, cfg.showRam ? 1 : 0,

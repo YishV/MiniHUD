@@ -139,7 +139,9 @@ RECT DesiredBounds(App& app) {
     const int w = std::max(1, (int)std::ceil(app.statsSize.x));
     const int h = std::max(1, (int)std::ceil(app.statsSize.y));
     const ImVec2 pivot = CornerPivot(app.cfg.corner);
-    const int x = pivot.x == 0.0f ? mon.left + app.cfg.offsetX : mon.right - app.cfg.offsetX - w;
+    const int x = pivot.x == 0.0f ? mon.left + app.cfg.offsetX
+                : pivot.x >= 1.0f ? mon.right - app.cfg.offsetX - w
+                : (mon.left + mon.right - w) / 2 + app.cfg.offsetX;
     const int y = pivot.y == 0.0f ? mon.top + app.cfg.offsetY : mon.bottom - app.cfg.offsetY - h;
     return {x, y, x + w, y + h};
 }
@@ -390,6 +392,10 @@ LRESULT CALLBACK TrayWndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
             return 0;
         }
         switch (msg) {
+        case WM_CLOSE:
+            // Also the path Windows' Restart Manager uses to close us before an upgrade installs.
+            Quit(*app);
+            return 0;
         case WM_HOTKEY:
             if (wp == kHotkeyId) ToggleHud(*app);
             else if (wp == kRecordHotkeyId) app->sensors.ToggleRecording();
@@ -470,7 +476,9 @@ std::optional<LRESULT> OverlayMessage(App& app, HWND, UINT msg, WPARAM wp, LPARA
         return 0;
     }
     case WM_CLOSE:
-        return 0; // only closable from the tray / settings panel
+        // Restart Manager (installer upgrades) and any other close request: exit cleanly.
+        Quit(app);
+        return 0;
     }
     return std::nullopt;
 }
@@ -485,7 +493,9 @@ void RenderFrame(App& app) {
     if (app.settings.open) {
         const RECT& b = app.overlay.Bounds();
         pivot = CornerPivot(app.cfg.corner);
-        pos.x = pivot.x == 0.0f ? (float)app.cfg.offsetX : float(b.right - b.left - app.cfg.offsetX);
+        pos.x = pivot.x == 0.0f ? (float)app.cfg.offsetX
+              : pivot.x >= 1.0f ? float(b.right - b.left - app.cfg.offsetX)
+              : float(b.right - b.left) * 0.5f + float(app.cfg.offsetX);
         pos.y = pivot.y == 0.0f ? (float)app.cfg.offsetY : float(b.bottom - b.top - app.cfg.offsetY);
     }
     if (app.hudVisible) app.statsSize = DrawStats(app.cfg, app.snapshot, pos, pivot,&app.hud);
