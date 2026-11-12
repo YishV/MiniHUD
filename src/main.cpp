@@ -127,9 +127,10 @@ RECT MonitorRect(App& app) {
     return app.monitors[idx].rect;
 }
 
-// True when the foreground window covers its whole monitor with no title bar, i.e. a full-screen
-// game (borderless included). Maximized windows do not count: browsers and editors should get the
-// taskbar docking instead.
+// True when the foreground window behaves like a full-screen game: it covers the monitor (exclusive
+// or borderless full-screen), or it is a title-bar-less maximized window covering the work area
+// (some borderless games use maximize). A normal maximized browser/editor has a caption and is not
+// treated as a game, so it gets the taskbar docking instead.
 bool ForegroundCoversMonitor(const App& app) {
     const HWND fg = GetForegroundWindow();
     if (!fg) return false;
@@ -137,7 +138,6 @@ bool ForegroundCoversMonitor(const App& app) {
     DWORD pid = 0;
     GetWindowThreadProcessId(fg, &pid);
     if (!pid) return false;
-    if (IsZoomed(fg)) return false;
     RECT client{};
     POINT origin{0, 0};
     MONITORINFO monitor{sizeof(monitor)};
@@ -145,8 +145,15 @@ bool ForegroundCoversMonitor(const App& app) {
         !GetMonitorInfoW(MonitorFromWindow(fg, MONITOR_DEFAULTTONULL), &monitor))
         return false;
     const RECT& full = monitor.rcMonitor;
-    return origin.x <= full.left && origin.y <= full.top && origin.x + client.right >= full.right &&
-           origin.y + client.bottom >= full.bottom;
+    const RECT& work = monitor.rcWork;
+    const int right = origin.x + client.right;
+    const int bottom = origin.y + client.bottom;
+    if (origin.x <= full.left && origin.y <= full.top && right >= full.right && bottom >= full.bottom)
+        return true;
+    const DWORD style = static_cast<DWORD>(GetWindowLongW(fg, GWL_STYLE));
+    const bool titleBar = (style & WS_CAPTION) == WS_CAPTION;
+    return !titleBar && IsZoomed(fg) && origin.x <= work.left && origin.y <= work.top && right >= work.right &&
+           bottom >= work.bottom;
 }
 
 // When the overlay should sit inside the taskbar right now, fills `rect` with the taskbar bounds.
