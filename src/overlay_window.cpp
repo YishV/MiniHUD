@@ -201,6 +201,16 @@ void OverlayWindow::SetInteractive(bool interactive) {
     }
 }
 
+void OverlayWindow::SetMouseTransparent(bool transparent) {
+    if (interactive_) return; // the settings panel manages pass-through itself
+    if (transparent == passThrough_) return;
+    passThrough_ = transparent;
+    LONG_PTR ex = GetWindowLongPtrW(hwnd_, GWL_EXSTYLE);
+    ex = transparent ? (ex | WS_EX_TRANSPARENT) : (ex & ~(LONG_PTR)WS_EX_TRANSPARENT);
+    SetWindowLongPtrW(hwnd_, GWL_EXSTYLE, ex);
+    SetWindowPos(hwnd_, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_FRAMECHANGED | SWP_NOACTIVATE);
+}
+
 void OverlayWindow::SetPassThrough(bool passThrough) {
     if (passThrough == passThrough_) return;
     passThrough_ = passThrough;

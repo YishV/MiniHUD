@@ -544,6 +544,7 @@ void RenderFrame(App& app) {
     RECT dockRect{};
     const bool docked = TaskbarDockRect(app, dockRect);
     app.cfg.docked = docked;
+    if (!app.settings.open) app.overlay.SetMouseTransparent(!docked);
     const int taskbarWidth = static_cast<int>(dockRect.right - dockRect.left);
     app.cfg.dockedMaxWidth = docked
         ? (app.cfg.dockWidth > 0 ? app.cfg.dockWidth : std::max(200, taskbarWidth * 45 / 100))
@@ -571,6 +572,7 @@ void RenderFrame(App& app) {
     UiAction action = UiAction::None;
     if (app.settings.open) action = DrawSettings(app.cfg, app.snapshot, app.monitors, app.settings);
     app.overlay.Render(app.settings.open);
+    if (docked) app.overlay.ReassertTopmost(); // the taskbar raises itself while hovered
     app.overlay.SetVisible(true); // only rendered while visible
     app.overlay.UpdateHitTest();
 
@@ -697,7 +699,7 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int) {
         MessageBoxW(nullptr, text.c_str(), L"MiniHUD", MB_ICONWARNING);
     }
     OfferPawnIOInstall(app);
-    SetTimer(app.overlay.Hwnd(), kTopmostTimer, 1000, nullptr);
+    SetTimer(app.overlay.Hwnd(), kTopmostTimer, 250, nullptr);
     app.sensors.Start(app.overlay.Hwnd(), WM_APP_SENSORS, app.cfg.updateIntervalMs);
 
     app.graphTimer = CreateWaitableTimerExW(nullptr, nullptr, CREATE_WAITABLE_TIMER_HIGH_RESOLUTION, TIMER_ALL_ACCESS);

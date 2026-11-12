@@ -42,6 +42,8 @@ public:
     void SetBounds(const RECT& rect);
     const RECT& Bounds() const { return bounds_; }
     void SetInteractive(bool interactive);
+    // Docked: stop being click-through so the taskbar does not get the hover that raises it above us.
+    void SetMouseTransparent(bool transparent);
     void SetExcludeFromCapture(bool exclude);
     void ReassertTopmost();
     // Shows the last rendered frame, so render before showing.
