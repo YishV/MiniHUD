@@ -375,6 +375,8 @@ UiAction DrawSettings(Config& cfg, const SensorSnapshot& snap, const std::vector
                 const char* corners[] = {"左上角","右上角","左下角","右下角","顶部居中"};
                 int corner = static_cast<int>(cfg.corner);
                 if (ImGui::Combo("屏幕位置", &corner, corners, 5)) cfg.corner = static_cast<Corner>(corner);
+                ImGui::Checkbox("非全屏时贴到任务栏",&cfg.dockTaskbar);
+                ImGui::SetItemTooltip("前台不是全屏应用时，整条停靠到任务栏左端的空白处；全屏游戏时回到上面的位置。任务栏高度不够会回到原位置；指标太多时会盖住任务栏图标。");
                 const std::string current = cfg.monitor < static_cast<int>(monitors.size()) ? monitors[cfg.monitor].label : "显示器未连接";
                 if (ImGui::BeginCombo("显示器",current.c_str())) {
                     for (int i=0;i<static_cast<int>(monitors.size());++i)

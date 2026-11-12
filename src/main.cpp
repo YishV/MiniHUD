@@ -127,6 +127,27 @@ RECT MonitorRect(App& app) {
     return app.monitors[idx].rect;
 }
 
+// True when the foreground window covers its whole monitor with no title bar, i.e. a full-screen
+// game (borderless included). Maximized windows do not count: browsers and editors should get the
+// taskbar docking instead.
+bool ForegroundCoversMonitor() {
+    const HWND fg = GetForegroundWindow();
+    if (!fg) return false;
+    DWORD pid = 0;
+    GetWindowThreadProcessId(fg, &pid);
+    if (!pid) return false;
+    if (IsZoomed(fg)) return false;
+    RECT client{};
+    POINT origin{0, 0};
+    MONITORINFO monitor{sizeof(monitor)};
+    if (!GetClientRect(fg, &client) || !ClientToScreen(fg, &origin) ||
+        !GetMonitorInfoW(MonitorFromWindow(fg, MONITOR_DEFAULTTONULL), &monitor))
+        return false;
+    const RECT& full = monitor.rcMonitor;
+    return origin.x <= full.left && origin.y <= full.top && origin.x + client.right >= full.right &&
+           origin.y + client.bottom >= full.bottom;
+}
+
 // Where the overlay window should be. Normally it is exactly the stats panel, anchored to the
 // configured corner. A window covering the whole monitor would make Windows treat it as a
 // full-screen app (auto "Do not disturb") and keep games from direct-flip presentation.
@@ -138,6 +159,17 @@ RECT DesiredBounds(App& app) {
     }
     const int w = std::max(1, (int)std::ceil(app.statsSize.x));
     const int h = std::max(1, (int)std::ceil(app.statsSize.y));
+    // Taskbar docking: while a normal (non-full-screen) window is in front, sit inside the
+    // taskbar's empty left area instead of covering the app underneath.
+    if (app.cfg.dockTaskbar && !ForegroundCoversMonitor()) {
+        APPBARDATA bar{sizeof(bar)};
+        if (SHAppBarMessage(ABM_GETTASKBARPOS, &bar) &&
+            (bar.uEdge == ABE_BOTTOM || bar.uEdge == ABE_TOP) && bar.rc.bottom - bar.rc.top >= h + 4) {
+            const int x = bar.rc.left + app.cfg.offsetX;
+            const int y = bar.rc.top + (bar.rc.bottom - bar.rc.top - h) / 2;
+            return {x, y, x + w, y + h};
+        }
+    }
     const ImVec2 pivot = CornerPivot(app.cfg.corner);
     const int x = pivot.x == 0.0f ? mon.left + app.cfg.offsetX
                 : pivot.x >= 1.0f ? mon.right - app.cfg.offsetX - w

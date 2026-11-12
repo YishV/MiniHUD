@@ -39,6 +39,7 @@ struct Config {
     bool fixedValueWidth = false; // reserve the widest sample per value (stable, but wider gaps)
     ThemeMode themeMode = ThemeMode::System; // persisted choice
     bool lightTheme = false;      // effective theme, refreshed on startup and WM_SETTINGCHANGE
+    bool dockTaskbar = false;     // non-full-screen foreground: sit inside the taskbar
     int updateIntervalMs = 500;
     std::string hotkey = "Ctrl+Shift+F12";
     std::string recordHotkey = "Ctrl+Shift+F11";
