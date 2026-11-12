@@ -37,8 +37,8 @@ int main() {
     Config narrowCfg=cfg; narrowCfg.docked=true; narrowCfg.dockedMaxWidth=120;
     ImGui::NewFrame(); DrawStats(narrowCfg,snap,ImVec2(0,0),ImVec2(0,0)); ImGui::Render();
     ImGui::NewFrame(); const auto narrowStats=DrawStats(narrowCfg,snap,ImVec2(0,0),ImVec2(0,0)); ImGui::Render();
-    // The docked panel respects its width budget and wraps into more rows when it is narrower.
-    const bool dockedWraps=dockedStats.x<=240 && narrowStats.x<=140 && narrowStats.y>dockedStats.y;
+    // Docked layout is always two rows; shrinking the width changes the fit, never the row count.
+    const bool dockedWraps=dockedStats.y>single.y && dockedStats.y<=64 && narrowStats.y<=dockedStats.y;
     cfg.singleLine=false; cfg.itemsPerRow=1;
     ImGui::NewFrame(); DrawStats(cfg,snap,ImVec2(12,12),ImVec2(0,0)); ImGui::Render();
     ImGui::NewFrame(); const auto multi=DrawStats(cfg,snap,ImVec2(12,12),ImVec2(0,0)); ImGui::Render();

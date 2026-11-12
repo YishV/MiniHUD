@@ -130,9 +130,10 @@ RECT MonitorRect(App& app) {
 // True when the foreground window covers its whole monitor with no title bar, i.e. a full-screen
 // game (borderless included). Maximized windows do not count: browsers and editors should get the
 // taskbar docking instead.
-bool ForegroundCoversMonitor() {
+bool ForegroundCoversMonitor(const App& app) {
     const HWND fg = GetForegroundWindow();
     if (!fg) return false;
+    if (fg == app.overlay.Hwnd() || fg == app.trayWnd) return false; // our own windows are never a game
     DWORD pid = 0;
     GetWindowThreadProcessId(fg, &pid);
     if (!pid) return false;
@@ -152,8 +153,8 @@ bool ForegroundCoversMonitor() {
 // Only for a bottom/top taskbar that is actually visible; the foreground app must not be
 // full-screen, so games keep the configured corner position.
 bool TaskbarDockRect(const App& app, RECT& rect) {
-    if (!app.cfg.dockTaskbar || app.settings.open) return false;
-    if (ForegroundCoversMonitor()) return false;
+    if (!app.cfg.dockTaskbar) return false;
+    if (ForegroundCoversMonitor(app)) return false;
     APPBARDATA bar{sizeof(bar)};
     if (!SHAppBarMessage(ABM_GETTASKBARPOS, &bar)) return false;
     if (bar.uEdge != ABE_BOTTOM && bar.uEdge != ABE_TOP) return false;
@@ -178,7 +179,8 @@ RECT DesiredBounds(App& app) {
     RECT taskbar{};
     if (TaskbarDockRect(app, taskbar) && taskbar.bottom - taskbar.top >= h + 4) {
         const int x = taskbar.left + 8 + app.cfg.offsetX; // small breathing room from the screen edge
-        const int y = taskbar.top + (taskbar.bottom - taskbar.top - h) / 2;
+        int y = taskbar.top + (taskbar.bottom - taskbar.top - h) / 2;
+        if (y < taskbar.top) y = taskbar.top; // never grow upwards over the app content
         return {x, y, x + w, y + h};
     }
     const ImVec2 pivot = CornerPivot(app.cfg.corner);
@@ -552,11 +554,17 @@ void RenderFrame(App& app) {
     ImVec2 pos(0, 0), pivot(0, 0);
     if (app.settings.open) {
         const RECT& b = app.overlay.Bounds();
-        pivot = CornerPivot(app.cfg.corner);
-        pos.x = pivot.x == 0.0f ? (float)app.cfg.offsetX
-              : pivot.x >= 1.0f ? float(b.right - b.left - app.cfg.offsetX)
-              : float(b.right - b.left) * 0.5f + float(app.cfg.offsetX);
-        pos.y = pivot.y == 0.0f ? (float)app.cfg.offsetY : float(b.bottom - b.top - app.cfg.offsetY);
+        if (docked) {
+            // Preview the real dock position while adjusting, instead of jumping to the corner.
+            pivot = ImVec2(0, 0);
+            pos = ImVec2(float(dockRect.left - mon.left + 8 + app.cfg.offsetX), float(dockRect.top - mon.top + 2));
+        } else {
+            pivot = CornerPivot(app.cfg.corner);
+            pos.x = pivot.x == 0.0f ? (float)app.cfg.offsetX
+                  : pivot.x >= 1.0f ? float(b.right - b.left - app.cfg.offsetX)
+                  : float(b.right - b.left) * 0.5f + float(app.cfg.offsetX);
+            pos.y = pivot.y == 0.0f ? (float)app.cfg.offsetY : float(b.bottom - b.top - app.cfg.offsetY);
+        }
     }
     if (app.hudVisible) app.statsSize = DrawStats(app.cfg, app.snapshot, pos, pivot,&app.hud);
 

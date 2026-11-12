@@ -248,7 +248,32 @@ ImVec2 DrawStats(const Config& cfg, const SensorSnapshot& snap, ImVec2 pos, ImVe
     std::array<int,kMetricCount> rank{};
     for (size_t i=0;i<kMetricCount;++i) rank[cfg.metricOrder[i]]=static_cast<int>(i);
     std::sort(items.begin(),items.end(),[&](const auto& a,const auto& b){ return rank[a.id]<rank[b.id]; });
-    const float fontSize = ImGui::GetStyle().FontSizeBase * (docked ? std::min(cfg.fontScale, kDockedFontScale) : cfg.fontScale);
+    // Docked: exactly two balanced, centred rows. Shrink the font until both rows fit the width.
+    const float baseFont = ImGui::GetStyle().FontSizeBase;
+    float dockScale = kDockedFontScale;
+    int dockSplit = 0;
+    std::vector<float> dockWidths;
+    if (docked && !items.empty()) {
+        const int count = static_cast<int>(items.size());
+        dockSplit = (count + 1) / 2;
+        dockWidths.resize(items.size());
+        auto rowWidth = [&](int begin, int end) {
+            float sum = 0;
+            for (int i = begin; i < end; ++i) sum += dockWidths[size_t(i)];
+            if (end > begin) sum += 16.0f * float(end - begin - 1);
+            return sum;
+        };
+        for (float scale = kDockedFontScale; scale >= 0.6f; scale -= 0.05f) {
+            ImGui::PushFont(nullptr, baseFont * scale);
+            for (size_t i = 0; i < items.size(); ++i)
+                dockWidths[i] = ImGui::CalcTextSize(items[i].label.c_str()).x + 7 +
+                                ImGui::CalcTextSize(items[i].text.c_str()).x;
+            ImGui::PopFont();
+            dockScale = scale;
+            if (std::max(rowWidth(0, dockSplit), rowWidth(dockSplit, count)) <= float(cfg.dockedMaxWidth)) break;
+        }
+    }
+    const float fontSize = baseFont * (docked ? dockScale : cfg.fontScale);
     if (hud.fontSize!=fontSize) { hud.valueWidths.fill(0); hud.fontSize=fontSize; }
     ImGui::PushFont(nullptr, fontSize);
     ImGui::PushStyleColor(ImGuiCol_WindowBg, light ? ImVec4(1.0f,1.0f,1.0f,1.0f) : ImVec4(0.06f,0.06f,0.06f,1.0f));
@@ -274,6 +299,37 @@ ImVec2 DrawStats(const Config& cfg, const SensorSnapshot& snap, ImVec2 pos, ImVe
         const float available = docked && cfg.dockedMaxWidth > 0
             ? float(cfg.dockedMaxWidth)
             : std::max(100.0f, ImGui::GetIO().DisplaySize.x - 18.0f);
+        const float lineHeight = ImGui::GetTextLineHeight();
+        if (docked && !items.empty()) {
+            const int count = static_cast<int>(items.size());
+            const int split = std::min(dockSplit, count);
+            float w1 = 0, w2 = 0;
+            for (int i = 0; i < split; ++i) w1 += dockWidths[size_t(i)] + 16.0f;
+            for (int i = split; i < count; ++i) w2 += dockWidths[size_t(i)] + 16.0f;
+            if (split) w1 -= 16.0f;
+            if (split < count) w2 -= 16.0f;
+            const float panelWidth = std::max(w1, w2);
+            for (int row = 0; row < 2; ++row) {
+                const int begin = row ? split : 0;
+                const int end = row ? count : split;
+                if (begin >= end) continue;
+                float rx = x + (panelWidth - (row ? w2 : w1)) * 0.5f;
+                const float ry = start.y + row * (lineHeight + rowGap);
+                for (int i = begin; i < end; ++i) {
+                    const HudItem& item = items[size_t(i)];
+                    const float labelWidth = ImGui::CalcTextSize(item.label.c_str()).x;
+                    const ImVec4 labelColor = light ? ImVec4(0.32f,0.32f,0.32f,1) : ImVec4(0.78f,0.78f,0.78f,1);
+                    ImGui::SetCursorPos(ImVec2(start.x + rx, ry));
+                    ImGui::TextColored(labelColor, "%s", item.label.c_str());
+                    ImGui::SetCursorPos(ImVec2(start.x + rx + labelWidth + 7, ry));
+                    ImGui::TextColored(item.color, "%s", item.text.c_str());
+                    rx += dockWidths[size_t(i)] + 16.0f;
+                }
+            }
+            width = x + panelWidth;
+            ImGui::SetCursorPos(start);
+            ImGui::Dummy(ImVec2(width, 2.0f * lineHeight + rowGap));
+        } else {
         for (const auto& item : items) {
             const float labelWidth=ImGui::CalcTextSize(item.label.c_str()).x;
             const float textWidth=ImGui::CalcTextSize(item.text.c_str()).x;
@@ -303,6 +359,7 @@ ImVec2 DrawStats(const Config& cfg, const SensorSnapshot& snap, ImVec2 pos, ImVe
         width = std::max(width, x > 0 ? x - moduleGap : 180);
         ImGui::SetCursorPos(start);
         ImGui::Dummy(ImVec2(width, items.empty() && !snap.recording ? 0 : (row + 1) * height - rowGap));
+        }
         if (cfg.showFrameGraph) DrawFrameGraph(snap, width);
         if (noticeVisible) ImGui::TextColored(valueColor,"%s",hud.notice.c_str());
         size = ImGui::GetWindowSize();
