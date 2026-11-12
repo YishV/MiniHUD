@@ -195,6 +195,7 @@ bool LoadConfig(const std::wstring& path, Config& cfg) {
     }
     cfg.lightTheme = EffectiveLightTheme(cfg.themeMode);
     cfg.dockTaskbar = ReadBool(path, ov, L"DockTaskbar", cfg.dockTaskbar);
+    cfg.dockWidth = ReadInt(path, ov, L"DockWidth", cfg.dockWidth);
     cfg.updateIntervalMs = ReadInt(path, ov, L"UpdateIntervalMs", cfg.updateIntervalMs);
     cfg.hotkey = ReadString(path, ov, L"Hotkey", cfg.hotkey);
     cfg.recordHotkey = ReadString(path,ov,L"RecordHotkey",cfg.recordHotkey);
@@ -275,6 +276,8 @@ bool SaveConfig(const std::wstring& path, const Config& cfg) {
         "Theme=%s\r\n"
         "; 1 = sit inside the taskbar while the foreground app is not full-screen\r\n"
         "DockTaskbar=%d\r\n"
+        "; max docked width in pixels (0 = 45%% of the taskbar width)\r\n"
+        "DockWidth=%d\r\n"
         "UpdateIntervalMs=%d\r\n"
         "; Modifiers: Ctrl, Shift, Alt, Win. Keys: F1-F24, A-Z, 0-9, Insert, Delete, Home, End, PageUp, PageDown, Pause, ScrollLock\r\n"
         "Hotkey=%s\r\n"
@@ -316,7 +319,7 @@ bool SaveConfig(const std::wstring& path, const Config& cfg) {
         "; 1 = offer to download and install the PawnIO driver (needed for CPU temperature and power) on startup\r\n"
         "OfferPawnIOInstall=%d\r\n",
         CornerToString(cfg.corner), cfg.offsetX, cfg.offsetY, cfg.monitor, cfg.fontScale, cfg.backgroundAlpha,
-        cfg.fixedValueWidth ? 1 : 0, ThemeToString(cfg.themeMode), cfg.dockTaskbar ? 1 : 0,
+        cfg.fixedValueWidth ? 1 : 0, ThemeToString(cfg.themeMode), cfg.dockTaskbar ? 1 : 0, cfg.dockWidth,
         cfg.updateIntervalMs, cfg.hotkey.c_str(), cfg.hideFromCapture ? 1 : 0,
         cfg.showFps ? 1 : 0, cfg.showFrameTime ? 1 : 0, cfg.showLowFps ? 1 : 0, cfg.showLow01Fps ? 1 : 0,
         cfg.showTime ? 1 : 0,

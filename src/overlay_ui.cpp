@@ -14,7 +14,7 @@
 namespace {
 
 // While docked inside the taskbar the panel shrinks a little so two rows still fit its height.
-constexpr float kDockedFontScale = 0.8f;
+constexpr float kDockedFontScale = 0.9f;
 const ImVec4 kFpsColor(0.56f, 0.87f, 0.36f, 1.0f);
 const ImVec4 kValueColor(0.96f, 0.96f, 0.96f, 1.0f);
 const ImVec4 kMissingColor(0.6f, 0.6f, 0.6f, 1.0f);
@@ -388,7 +388,11 @@ UiAction DrawSettings(Config& cfg, const SensorSnapshot& snap, const std::vector
                 int corner = static_cast<int>(cfg.corner);
                 if (ImGui::Combo("屏幕位置", &corner, corners, 5)) cfg.corner = static_cast<Corner>(corner);
                 ImGui::Checkbox("非全屏时贴到任务栏",&cfg.dockTaskbar);
-                ImGui::SetItemTooltip("前台不是全屏应用时，整条停靠到任务栏左端的空白处；全屏游戏时回到上面的位置。任务栏高度不够会回到原位置；指标太多时会盖住任务栏图标。");
+                ImGui::SetItemTooltip("前台不是全屏应用时，整条停靠到任务栏左端的空白处；全屏游戏时回到上面的位置。任务栏高度不够会回到原位置。");
+                ImGui::BeginDisabled(!cfg.dockTaskbar);
+                ImGui::SliderInt("任务栏停靠宽度",&cfg.dockWidth,0,1400,"%d px");
+                ImGui::SetItemTooltip("停靠时按这个宽度换行，调到任务栏图标左侧的空白区即可；0 表示按任务栏宽度的 45%% 自动计算。");
+                ImGui::EndDisabled();
                 const std::string current = cfg.monitor < static_cast<int>(monitors.size()) ? monitors[cfg.monitor].label : "显示器未连接";
                 if (ImGui::BeginCombo("显示器",current.c_str())) {
                     for (int i=0;i<static_cast<int>(monitors.size());++i)

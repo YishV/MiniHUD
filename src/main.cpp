@@ -177,7 +177,7 @@ RECT DesiredBounds(App& app) {
     // taskbar's empty left area instead of covering the app underneath.
     RECT taskbar{};
     if (TaskbarDockRect(app, taskbar) && taskbar.bottom - taskbar.top >= h + 4) {
-        const int x = taskbar.left + app.cfg.offsetX;
+        const int x = taskbar.left + 8 + app.cfg.offsetX; // small breathing room from the screen edge
         const int y = taskbar.top + (taskbar.bottom - taskbar.top - h) / 2;
         return {x, y, x + w, y + h};
     }
@@ -542,7 +542,10 @@ void RenderFrame(App& app) {
     RECT dockRect{};
     const bool docked = TaskbarDockRect(app, dockRect);
     app.cfg.docked = docked;
-    app.cfg.dockedMaxWidth = docked ? std::max(200, int((dockRect.right - dockRect.left) * 45 / 100)) : 0;
+    const int taskbarWidth = static_cast<int>(dockRect.right - dockRect.left);
+    app.cfg.dockedMaxWidth = docked
+        ? (app.cfg.dockWidth > 0 ? app.cfg.dockWidth : std::max(200, taskbarWidth * 45 / 100))
+        : 0;
 
     // Passive: the window *is* the panel, so draw it at the origin. Settings: the window
     // spans the monitor, so anchor the panel to the corner like it will appear afterwards.

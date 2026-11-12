@@ -40,6 +40,7 @@ struct Config {
     ThemeMode themeMode = ThemeMode::System; // persisted choice
     bool lightTheme = false;      // effective theme, refreshed on startup and WM_SETTINGCHANGE
     bool dockTaskbar = false;     // non-full-screen foreground: sit inside the taskbar
+    int dockWidth = 720;          // max width while docked (px); 0 = 45% of the taskbar width
     // Runtime-only (not saved): set every frame while docked to the taskbar.
     bool docked = false;
     int dockedMaxWidth = 0;       // wrapping width inside the taskbar
