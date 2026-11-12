@@ -13,6 +13,8 @@
 
 namespace {
 
+// While docked inside the taskbar the panel shrinks a little so two rows still fit its height.
+constexpr float kDockedFontScale = 0.8f;
 const ImVec4 kFpsColor(0.56f, 0.87f, 0.36f, 1.0f);
 const ImVec4 kValueColor(0.96f, 0.96f, 0.96f, 1.0f);
 const ImVec4 kMissingColor(0.6f, 0.6f, 0.6f, 1.0f);
@@ -179,10 +181,13 @@ ImVec2 DrawStats(const Config& cfg, const SensorSnapshot& snap, ImVec2 pos, ImVe
     static HudRuntime fallback;
     HudRuntime& hud=runtime ? *runtime : fallback;
     const double now=double(Qpc())/double(QpcFrequency());
-    // Light theme: dark text for a transparent overlay over light backgrounds.
-    const ImVec4 valueColor = cfg.lightTheme ? ImVec4(0.06f,0.06f,0.06f,1) : kValueColor;
-    const ImVec4 missingColor = cfg.lightTheme ? ImVec4(0.42f,0.42f,0.42f,1) : kMissingColor;
-    const ImVec4 hotColor = cfg.lightTheme ? ImVec4(0.78f,0.08f,0.08f,1) : kHotColor;
+    // Light theme: dark text for a transparent overlay over light backgrounds. While docked to the
+    // taskbar the taskbar's own theme wins, so the text blends into it.
+    const bool docked = cfg.docked;
+    const bool light = docked ? TaskbarUsesLightTheme() : cfg.lightTheme;
+    const ImVec4 valueColor = light ? ImVec4(0.06f,0.06f,0.06f,1) : kValueColor;
+    const ImVec4 missingColor = light ? ImVec4(0.42f,0.42f,0.42f,1) : kMissingColor;
+    const ImVec4 hotColor = light ? ImVec4(0.78f,0.08f,0.08f,1) : kHotColor;
     std::vector<HudItem> items;
     auto add = [&](Metric metric, const std::optional<float>& value, const char* format) {
         const size_t index = static_cast<size_t>(metric);
@@ -243,15 +248,15 @@ ImVec2 DrawStats(const Config& cfg, const SensorSnapshot& snap, ImVec2 pos, ImVe
     std::array<int,kMetricCount> rank{};
     for (size_t i=0;i<kMetricCount;++i) rank[cfg.metricOrder[i]]=static_cast<int>(i);
     std::sort(items.begin(),items.end(),[&](const auto& a,const auto& b){ return rank[a.id]<rank[b.id]; });
-    const float fontSize = ImGui::GetStyle().FontSizeBase * cfg.fontScale;
+    const float fontSize = ImGui::GetStyle().FontSizeBase * (docked ? std::min(cfg.fontScale, kDockedFontScale) : cfg.fontScale);
     if (hud.fontSize!=fontSize) { hud.valueWidths.fill(0); hud.fontSize=fontSize; }
     ImGui::PushFont(nullptr, fontSize);
-    ImGui::PushStyleColor(ImGuiCol_WindowBg, cfg.lightTheme ? ImVec4(1.0f,1.0f,1.0f,1.0f) : ImVec4(0.06f,0.06f,0.06f,1.0f));
-    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(9, 5));
+    ImGui::PushStyleColor(ImGuiCol_WindowBg, light ? ImVec4(1.0f,1.0f,1.0f,1.0f) : ImVec4(0.06f,0.06f,0.06f,1.0f));
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, docked ? ImVec2(6, 1) : ImVec2(9, 5));
     ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 0);
     ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0);
     ImGui::SetNextWindowPos(pos, ImGuiCond_Always, pivot);
-    ImGui::SetNextWindowBgAlpha(cfg.backgroundAlpha);
+    ImGui::SetNextWindowBgAlpha(docked ? 0.0f : cfg.backgroundAlpha);
     ImVec2 size{};
     const auto flags = ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_AlwaysAutoResize |
         ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoInputs | ImGuiWindowFlags_NoFocusOnAppearing;
@@ -263,8 +268,12 @@ ImVec2 DrawStats(const Config& cfg, const SensorSnapshot& snap, ImVec2 pos, ImVe
             ImGui::GetWindowDrawList()->AddCircleFilled(ImVec2(screen.x+4,screen.y+ImGui::GetTextLineHeight()/2),3,IM_COL32(255,70,70,255));
         }
         int row = 0, col = 0;
-        const float height = ImGui::GetTextLineHeight() + cfg.rowGap;
-        const float available = std::max(100.0f, ImGui::GetIO().DisplaySize.x - 18.0f);
+        const float rowGap = docked ? std::min(cfg.rowGap, 2.0f) : cfg.rowGap;
+        const float moduleGap = docked ? std::min(cfg.moduleGap, 16.0f) : cfg.moduleGap;
+        const float height = ImGui::GetTextLineHeight() + rowGap;
+        const float available = docked && cfg.dockedMaxWidth > 0
+            ? float(cfg.dockedMaxWidth)
+            : std::max(100.0f, ImGui::GetIO().DisplaySize.x - 18.0f);
         for (const auto& item : items) {
             const float labelWidth=ImGui::CalcTextSize(item.label.c_str()).x;
             const float textWidth=ImGui::CalcTextSize(item.text.c_str()).x;
@@ -276,21 +285,24 @@ ImVec2 DrawStats(const Config& cfg, const SensorSnapshot& snap, ImVec2 pos, ImVe
             const float slot=cfg.fixedValueWidth ? valueWidth : textWidth;
             const float itemWidth=labelWidth+7+slot;
             if (col && ((!cfg.singleLine && col >= cfg.itemsPerRow) || x + itemWidth > available)) {
-                width = std::max(width, x - cfg.moduleGap); x = 0; ++row; col = 0;
+                width = std::max(width, x - moduleGap); x = 0; ++row; col = 0;
             }
             ImGui::SetCursorPos(ImVec2(start.x + x, start.y + row * height));
             const auto rgb=cfg.labelColors[item.id];
-            const ImVec4 labelColor = cfg.lightTheme && rgb==0xFFFFFFu
-                ? ImVec4(0.06f,0.06f,0.06f,1)
-                : ImVec4(((rgb>>16)&255)/255.0f,((rgb>>8)&255)/255.0f,(rgb&255)/255.0f,1);
+            // Docked: ignore custom colours so the text matches the taskbar instead of standing out.
+            const ImVec4 labelColor = docked
+                ? (light ? ImVec4(0.32f,0.32f,0.32f,1) : ImVec4(0.78f,0.78f,0.78f,1))
+                : (light && rgb==0xFFFFFFu
+                    ? ImVec4(0.06f,0.06f,0.06f,1)
+                    : ImVec4(((rgb>>16)&255)/255.0f,((rgb>>8)&255)/255.0f,(rgb&255)/255.0f,1));
             ImGui::TextColored(labelColor, "%s", item.label.c_str());
             ImGui::SetCursorPos(ImVec2(start.x+x+labelWidth+7+slot-textWidth,start.y+row*height));
             ImGui::TextColored(item.color, "%s", item.text.c_str());
-            x += itemWidth + cfg.moduleGap; ++col;
+            x += itemWidth + moduleGap; ++col;
         }
-        width = std::max(width, x > 0 ? x - cfg.moduleGap : 180);
+        width = std::max(width, x > 0 ? x - moduleGap : 180);
         ImGui::SetCursorPos(start);
-        ImGui::Dummy(ImVec2(width, items.empty() && !snap.recording ? 0 : (row + 1) * height - cfg.rowGap));
+        ImGui::Dummy(ImVec2(width, items.empty() && !snap.recording ? 0 : (row + 1) * height - rowGap));
         if (cfg.showFrameGraph) DrawFrameGraph(snap, width);
         if (noticeVisible) ImGui::TextColored(valueColor,"%s",hud.notice.c_str());
         size = ImGui::GetWindowSize();

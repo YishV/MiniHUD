@@ -157,6 +157,18 @@ bool SystemUsesLightTheme() {
     return ok && value != 0;
 }
 
+bool TaskbarUsesLightTheme() {
+    HKEY key = nullptr;
+    if (RegOpenKeyExW(HKEY_CURRENT_USER, L"Software\\Microsoft\\Windows\\CurrentVersion\\Themes\\Personalize", 0,
+                      KEY_READ, &key) != ERROR_SUCCESS)
+        return false;
+    DWORD value = 0, size = sizeof(value);
+    const bool ok =
+        RegGetValueW(key, nullptr, L"SystemUsesLightTheme", RRF_RT_REG_DWORD, nullptr, &value, &size) == ERROR_SUCCESS;
+    RegCloseKey(key);
+    return ok && value != 0;
+}
+
 bool EffectiveLightTheme(ThemeMode mode) {
     return mode == ThemeMode::Light || (mode == ThemeMode::System && SystemUsesLightTheme());
 }

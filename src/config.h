@@ -40,6 +40,9 @@ struct Config {
     ThemeMode themeMode = ThemeMode::System; // persisted choice
     bool lightTheme = false;      // effective theme, refreshed on startup and WM_SETTINGCHANGE
     bool dockTaskbar = false;     // non-full-screen foreground: sit inside the taskbar
+    // Runtime-only (not saved): set every frame while docked to the taskbar.
+    bool docked = false;
+    int dockedMaxWidth = 0;       // wrapping width inside the taskbar
     int updateIntervalMs = 500;
     std::string hotkey = "Ctrl+Shift+F12";
     std::string recordHotkey = "Ctrl+Shift+F11";
@@ -93,6 +96,9 @@ ThemeMode ParseTheme(const std::string& text, ThemeMode fallback);
 
 // Windows "app theme" (Personalize\AppsUseLightTheme).
 bool SystemUsesLightTheme();
+
+// The taskbar follows the system theme (Personalize\SystemUsesLightTheme), not the app theme.
+bool TaskbarUsesLightTheme();
 
 // Dark/Light/System choice -> the theme DrawStats uses right now.
 bool EffectiveLightTheme(ThemeMode mode);

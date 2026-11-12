@@ -148,6 +148,20 @@ bool ForegroundCoversMonitor() {
            origin.y + client.bottom >= full.bottom;
 }
 
+// When the overlay should sit inside the taskbar right now, fills `rect` with the taskbar bounds.
+// Only for a bottom/top taskbar that is actually visible; the foreground app must not be
+// full-screen, so games keep the configured corner position.
+bool TaskbarDockRect(const App& app, RECT& rect) {
+    if (!app.cfg.dockTaskbar || app.settings.open) return false;
+    if (ForegroundCoversMonitor()) return false;
+    APPBARDATA bar{sizeof(bar)};
+    if (!SHAppBarMessage(ABM_GETTASKBARPOS, &bar)) return false;
+    if (bar.uEdge != ABE_BOTTOM && bar.uEdge != ABE_TOP) return false;
+    if (bar.rc.bottom - bar.rc.top < 24) return false; // hidden (auto-hide) taskbar
+    rect = bar.rc;
+    return true;
+}
+
 // Where the overlay window should be. Normally it is exactly the stats panel, anchored to the
 // configured corner. A window covering the whole monitor would make Windows treat it as a
 // full-screen app (auto "Do not disturb") and keep games from direct-flip presentation.
@@ -161,14 +175,11 @@ RECT DesiredBounds(App& app) {
     const int h = std::max(1, (int)std::ceil(app.statsSize.y));
     // Taskbar docking: while a normal (non-full-screen) window is in front, sit inside the
     // taskbar's empty left area instead of covering the app underneath.
-    if (app.cfg.dockTaskbar && !ForegroundCoversMonitor()) {
-        APPBARDATA bar{sizeof(bar)};
-        if (SHAppBarMessage(ABM_GETTASKBARPOS, &bar) &&
-            (bar.uEdge == ABE_BOTTOM || bar.uEdge == ABE_TOP) && bar.rc.bottom - bar.rc.top >= h + 4) {
-            const int x = bar.rc.left + app.cfg.offsetX;
-            const int y = bar.rc.top + (bar.rc.bottom - bar.rc.top - h) / 2;
-            return {x, y, x + w, y + h};
-        }
+    RECT taskbar{};
+    if (TaskbarDockRect(app, taskbar) && taskbar.bottom - taskbar.top >= h + 4) {
+        const int x = taskbar.left + app.cfg.offsetX;
+        const int y = taskbar.top + (taskbar.bottom - taskbar.top - h) / 2;
+        return {x, y, x + w, y + h};
     }
     const ImVec2 pivot = CornerPivot(app.cfg.corner);
     const int x = pivot.x == 0.0f ? mon.left + app.cfg.offsetX
@@ -526,6 +537,12 @@ std::optional<LRESULT> OverlayMessage(App& app, HWND, UINT msg, WPARAM wp, LPARA
 void RenderFrame(App& app) {
     const RECT mon = MonitorRect(app);
     app.overlay.NewFrame(ImVec2(float(mon.right - mon.left), float(mon.bottom - mon.top)));
+
+    // Docked presentation: transparent, taskbar-themed, wrapped to the taskbar's free width.
+    RECT dockRect{};
+    const bool docked = TaskbarDockRect(app, dockRect);
+    app.cfg.docked = docked;
+    app.cfg.dockedMaxWidth = docked ? std::max(200, int((dockRect.right - dockRect.left) * 45 / 100)) : 0;
 
     // Passive: the window *is* the panel, so draw it at the origin. Settings: the window
     // spans the monitor, so anchor the panel to the corner like it will appear afterwards.

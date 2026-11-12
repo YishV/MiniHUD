@@ -30,6 +30,15 @@ int main() {
     ImGui::NewFrame(); DrawStats(fixedCfg,snap,ImVec2(12,12),ImVec2(0,0)); ImGui::Render();
     ImGui::NewFrame(); const auto fixedWidthStats=DrawStats(fixedCfg,snap,ImVec2(12,12),ImVec2(0,0)); ImGui::Render();
     const bool compactTighter=single.x<fixedWidthStats.x;
+    // Docked to the taskbar: wraps into multiple rows within the given width and uses a smaller font.
+    Config dockedCfg=cfg; dockedCfg.docked=true; dockedCfg.dockedMaxWidth=220;
+    ImGui::NewFrame(); DrawStats(dockedCfg,snap,ImVec2(0,0),ImVec2(0,0)); ImGui::Render();
+    ImGui::NewFrame(); const auto dockedStats=DrawStats(dockedCfg,snap,ImVec2(0,0),ImVec2(0,0)); ImGui::Render();
+    Config narrowCfg=cfg; narrowCfg.docked=true; narrowCfg.dockedMaxWidth=120;
+    ImGui::NewFrame(); DrawStats(narrowCfg,snap,ImVec2(0,0),ImVec2(0,0)); ImGui::Render();
+    ImGui::NewFrame(); const auto narrowStats=DrawStats(narrowCfg,snap,ImVec2(0,0),ImVec2(0,0)); ImGui::Render();
+    // The docked panel respects its width budget and wraps into more rows when it is narrower.
+    const bool dockedWraps=dockedStats.x<=240 && narrowStats.x<=140 && narrowStats.y>dockedStats.y;
     cfg.singleLine=false; cfg.itemsPerRow=1;
     ImGui::NewFrame(); DrawStats(cfg,snap,ImVec2(12,12),ImVec2(0,0)); ImGui::Render();
     ImGui::NewFrame(); const auto multi=DrawStats(cfg,snap,ImVec2(12,12),ImVec2(0,0)); ImGui::Render();
@@ -98,13 +107,13 @@ int main() {
     const bool missingOk=missing==UiAction::None;
     const ImVec2 centerPivot=CornerPivot(Corner::TopCenter);
     const bool pivotOk=centerPivot.x==0.5f && centerPivot.y==0.0f;
-    const bool ok=independentColor && lightText && redValue && fixedWidth && noticeLayout && recordingDot && missingOk && pivotOk && compactTighter && englishOk && spacingOk && chineseGlyph && single.x>100 && single.x<1920 && single.y<50 && multi.y>single.y*2 && ImGui::GetDrawData()->TotalVtxCount>0;
+    const bool ok=dockedWraps && independentColor && lightText && redValue && fixedWidth && noticeLayout && recordingDot && missingOk && pivotOk && compactTighter && englishOk && spacingOk && chineseGlyph && single.x>100 && single.x<1920 && single.y<50 && multi.y>single.y*2 && ImGui::GetDrawData()->TotalVtxCount>0;
     std::printf("Label/value colors: %s; alert retains label color: %s\n",independentColor?"PASSED":"FAILED",redValue?"PASSED":"FAILED");
     std::printf("Fixed value width: %s; notice layout restores: %s\n",fixedWidth?"PASSED":"FAILED",noticeLayout?"PASSED":"FAILED");
     std::printf("Recording indicator: %s\n",recordingDot?"PASSED":"FAILED");
     std::printf("Driver-missing settings layout: %s\n",missingOk?"PASSED":"FAILED");
     std::printf("Top-center pivot: %s\n",pivotOk?"PASSED":"FAILED");
-    std::printf("Compact value gap: %s; light theme: %s\n",compactTighter?"PASSED":"FAILED",lightText?"PASSED":"FAILED");
+    std::printf("Compact value gap: %s; light theme: %s; docked wrap: %s\n",compactTighter?"PASSED":"FAILED",lightText?"PASSED":"FAILED",dockedWraps?"PASSED":"FAILED");
     std::printf("Chinese UI geometry: %s; single %.0fx%.0f; multi %.0fx%.0f\n",ok?"PASSED":"FAILED",single.x,single.y,multi.x,multi.y);
     std::printf("English metric style: %s; %.0fx%.0f\n",englishOk?"PASSED":"FAILED",english.x,english.y);
     ImGui::DestroyContext();
